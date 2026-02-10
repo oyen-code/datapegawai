@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Monitoring ASN - KGB & Pangkat</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        /* Kustomisasi Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c7c7c7; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a0a0a0; }
+        
+        .nav-active { background-color: #eff6ff; color: #2563eb; border-right: 4px solid #2563eb; }
+        .table-head-sticky { position: sticky; top: 0; z-index: 10; background-color: #f9fafb; }
+        
+        /* Loading Spinner */
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 2s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <aside class="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col z-20 transition-all duration-300" id="sidebar">
+        <div class="h-16 flex items-center px-6 border-b border-gray-200">
+            <i class="fa-solid fa-user-tie text-blue-600 text-xl mr-3"></i>
+            <span class="font-bold text-lg text-gray-800">SIMPEG ASN</span>
+        </div>
+        
+        <nav class="flex-1 overflow-y-auto py-4">
+            <div class="px-4 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Menu Utama</div>
+            <a onclick="app.navigate('dashboard')" id="nav-dashboard" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors nav-active">
+                <i class="fa-solid fa-chart-line w-6"></i> Dashboard
+            </a>
+            <a onclick="app.navigate('pegawai')" id="nav-pegawai" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors">
+                <i class="fa-solid fa-users w-6"></i> Data Pegawai
+            </a>
+            <a onclick="app.navigate('monitoring')" id="nav-monitoring" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors">
+                <i class="fa-solid fa-clock w-6"></i> Monitoring Jadwal
+            </a>
+
+            <div class="px-4 mt-6 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Riwayat SK</div>
+            <a onclick="app.navigate('riwayat_kgb')" id="nav-riwayat_kgb" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors">
+                <i class="fa-solid fa-money-bill-wave w-6"></i> Riwayat KGB
+            </a>
+            <a onclick="app.navigate('riwayat_pangkat')" id="nav-riwayat_pangkat" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors">
+                <i class="fa-solid fa-medal w-6"></i> Riwayat Pangkat
+            </a>
+
+            <div class="px-4 mt-6 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Master Data</div>
+            <a onclick="app.navigate('master_jabatan')" id="nav-master_jabatan" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors">
+                <i class="fa-solid fa-briefcase w-6"></i> Jabatan
+            </a>
+            <a onclick="app.navigate('master_pangkat')" id="nav-master_pangkat" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors">
+                <i class="fa-solid fa-layer-group w-6"></i> Pangkat/Gol
+            </a>
+        </nav>
+        
+        <div class="p-4 border-t border-gray-200 text-center text-xs text-gray-500">
+            &copy; 2024 Sistem Monitoring
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
+        <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 md:hidden">
+            <span class="font-bold text-lg text-gray-800">SIMPEG ASN</span>
+            <button onclick="document.getElementById('sidebar').classList.toggle('hidden'); document.getElementById('sidebar').classList.toggle('absolute'); document.getElementById('sidebar').classList.toggle('h-full');" class="text-gray-600 focus:outline-none">
+                <i class="fa-solid fa-bars text-xl"></i>
+            </button>
+        </header>
+
+        <div id="content-area" class="flex-1 overflow-auto p-6">
+            </div>
+    </main>
+
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 overflow-hidden transform transition-all scale-100">
+            <div class="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-gray-800" id="modal-title">Judul Modal</h3>
+                <button onclick="app.closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div class="p-6" id="modal-body">
+                </div>
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                <button onclick="app.closeModal()" class="px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 text-sm font-medium">Batal</button>
+                <button id="modal-btn-save" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium shadow-sm">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded shadow-lg transform translate-y-20 transition-transform duration-300 z-50 flex items-center">
+        <i class="fa-solid fa-check-circle text-green-400 mr-3"></i>
+        <span id="toast-msg">Berhasil disimpan</span>
+    </div>
+
+    <script>
+        /**
+         * STATE MANAGEMENT & DATABASE (LocalStorage)
+         */
+        const db = {
+            get: (key) => JSON.parse(localStorage.getItem(key)) || [],
+            set: (key, data) => localStorage.setItem(key, JSON.stringify(data)),
+            init: () => {
+                if (!localStorage.getItem('pegawai')) {
+                    // Seed Data Awal jika kosong
+                    console.log("Seeding initial data...");
+                    db.set('master_pangkat', [
+                        {id: 'p1', nama: 'II/c', gol: 'II'}, {id: 'p2', nama: 'II/d', gol: 'II'},
+                        {id: 'p3', nama: 'III/a', gol: 'III'}, {id: 'p4', nama: 'III/b', gol: 'III'}
+                    ]);
+                    db.set('master_jabatan', [
+                        {id: 'j1', nama: 'Pranata Komputer'}, {id: 'j2', nama: 'Analis Kebijakan'}, {id: 'j3', nama: 'Guru Pratama'}
+                    ]);
+                    db.set('pegawai', [
+                        {id: '101', nip: '19900101', nama: 'Budi Santoso', jabatanId: 'j1', pangkatId: 'p3'},
+                        {id: '102', nip: '19920505', nama: 'Siti Aminah', jabatanId: 'j2', pangkatId: 'p2'}
+                    ]);
+                    // Seed SK History (KGB: 2th, Pangkat: 4th)
+                    const today = new Date();
+                    const lastYear = new Date(today.getFullYear() - 2, today.getMonth() - 1, 1); // Terlambat scenario
+                    db.set('riwayat_kgb', [
+                        {id: 'k1', pegawaiId: '101', no_sk: 'SK-001', tmt: '2022-01-01', gaji: 3000000, tgl_sk: '2021-12-01'}
+                    ]);
+                    db.set('riwayat_pangkat', [
+                        {id: 'pt1', pegawaiId: '101', no_sk: 'SKP-001', tmt: '2020-01-01', pangkat_baru: 'III/a', tgl_sk: '2019-12-01'}
+                    ]);
+                }
+            }
+        };
+
+        /**
+         * UTILITY FUNCTIONS
+         */
+        const util = {
+            formatDate: (dateStr) => {
+                if(!dateStr) return '-';
+                const options = { year: 'numeric', month: 'long', day: 'numeric' };
+                return new Date(dateStr).toLocaleDateString('id-ID', options);
+            },
+            formatRupiah: (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(angka),
+            addMonths: (dateStr, months) => {
+                const d = new Date(dateStr);
+                d.setMonth(d.getMonth() + months);
+                return d.toISOString().split('T')[0];
+            },
+            getStatus: (targetDateStr) => {
+                const today = new Date();
+                const target = new Date(targetDateStr);
+                const diffTime = target - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays < 0) return { text: 'Terlambat', color: 'bg-red-100 text-red-800', code: 'late' };
+                if (diffDays <= 30) return { text: 'Jatuh Tempo Bulan Ini', color: 'bg-orange-100 text-orange-800', code: 'due' };
+                if (diffDays <= 90) return { text: 'Mendekati (< 3 Bln)', color: 'bg-yellow-100 text-yellow-800', code: 'near' };
+                return { text: 'Aman', color: 'bg-green-100 text-green-800', code: 'safe' };
+            },
+            showToast: (msg, isError = false) => {
+                const t = document.getElementById('toast');
+                const tMsg = document.getElementById('toast-msg');
+                t.className = `fixed bottom-5 right-5 px-6 py-3 rounded shadow-lg transform transition-transform duration-300 z-50 flex items-center ${isError ? 'bg-red-600' : 'bg-gray-800'} text-white translate-y-0`;
+                tMsg.innerText = msg;
+                setTimeout(() => t.classList.add('translate-y-20'), 3000);
+            }
+        };
+
+        /**
+         * CORE APPLICATION LOGIC
+         */
+        const app = {
+            currentPage: '',
+            chartInstance: null,
+
+            init: () => {
+                db.init();
+                app.navigate('dashboard');
+            },
+
+            navigate: (page) => {
+                app.currentPage = page;
+                
+                // Update Sidebar Active State
+                document.querySelectorAll('nav a').forEach(el => el.classList.remove('nav-active'));
+                const navLink = document.getElementById(`nav-${page}`);
+                if(navLink) navLink.classList.add('nav-active');
+
+                // Render Page Content
+                const content = document.getElementById('content-area');
+                content.innerHTML = `<div class="flex justify-center pt-10"><div class="loader"></div></div>`; // Loading skeleton
+
+                setTimeout(() => {
+                    switch(page) {
+                        case 'dashboard': app.renderDashboard(content); break;
+                        case 'pegawai': app.renderPegawai(content); break;
+                        case 'riwayat_kgb': app.renderRiwayat(content, 'kgb'); break;
+                        case 'riwayat_pangkat': app.renderRiwayat(content, 'pangkat'); break;
+                        case 'monitoring': app.renderMonitoring(content); break;
+                        case 'master_jabatan': app.renderMaster(content, 'master_jabatan'); break;
+                        case 'master_pangkat': app.renderMaster(content, 'master_pangkat'); break;
+                    }
+                }, 200); // Simulate subtle transition
+            },
+
+            // --- PAGE RENDERERS ---
+
+            renderDashboard: (container) => {
+                // Logic Perhitungan Data Dashboard
+                const pegawai = db.get('pegawai');
+                const kgbHist = db.get('riwayat_kgb');
+                const pangHist = db.get('riwayat_pangkat');
+                const today = new Date();
+                
+                let kgbThisMonth = 0;
+                let pangkatThisYear = 0;
+                let lateCount = 0;
+
+                // Proses data untuk grafik & stats
+                const kgbPerMonth = Array(12).fill(0);
+                
+                pegawai.forEach(p => {
+                    // Cek KGB Terakhir
+                    const lastKgb = kgbHist.filter(k => k.pegawaiId === p.id).sort((a,b) => b.tmt.localeCompare(a.tmt))[0];
+                    if(lastKgb) {
+                        const nextKgb = new Date(util.addMonths(lastKgb.tmt, 24));
+                        const status = util.getStatus(nextKgb);
+                        if(status.code === 'late') lateCount++;
+                        if(nextKgb.getMonth() === today.getMonth() && nextKgb.getFullYear() === today.getFullYear()) kgbThisMonth++;
+                        
+                        // Populate Chart Data (Tahun ini)
+                        if(nextKgb.getFullYear() === today.getFullYear()) {
+                            kgbPerMonth[nextKgb.getMonth()]++;
+                        }
+                    }
+
+                    // Cek Pangkat Terakhir
+                    const lastPang = pangHist.filter(k => k.pegawaiId === p.id).sort((a,b) => b.tmt.localeCompare(a.tmt))[0];
+                    if(lastPang) {
+                        const nextPang = new Date(util.addMonths(lastPang.tmt, 48)); // 4 Tahun
+                        const status = util.getStatus(nextPang);
+                        if(status.code === 'late') lateCount++;
+                        if(nextPang.getFullYear() === today.getFullYear()) pangkatThisYear++;
+                    }
+                });
+
+                container.innerHTML = `
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Dashboard Monitoring</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-blue-500">
+                            <div class="text-gray-500 text-sm font-medium uppercase">Total Pegawai</div>
+                            <div class="text-3xl font-bold text-gray-800 mt-2">${pegawai.length}</div>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-green-500">
+                            <div class="text-gray-500 text-sm font-medium uppercase">KGB Bulan Ini</div>
+                            <div class="text-3xl font-bold text-gray-800 mt-2">${kgbThisMonth}</div>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-yellow-500">
+                            <div class="text-gray-500 text-sm font-medium uppercase">Naik Pangkat Tahun Ini</div>
+                            <div class="text-3xl font-bold text-gray-800 mt-2">${pangkatThisYear}</div>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-red-500">
+                            <div class="text-gray-500 text-sm font-medium uppercase">Terlambat Proses</div>
+                            <div class="text-3xl font-bold text-gray-800 mt-2">${lateCount}</div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-white p-6 rounded-lg shadow-sm">
+                            <h3 class="font-bold text-gray-700 mb-4">Proyeksi KGB Tahun Ini</h3>
+                            <canvas id="chartKgb"></canvas>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-sm">
+                            <h3 class="font-bold text-gray-700 mb-4">Info Penting</h3>
+                            <div class="bg-blue-50 p-4 rounded text-blue-800 text-sm mb-2">
+                                <i class="fa-solid fa-info-circle mr-2"></i> Sistem mendeteksi KGB berdasarkan TMT Terakhir + 2 Tahun.
+                            </div>
+                            <div class="bg-blue-50 p-4 rounded text-blue-800 text-sm">
+                                <i class="fa-solid fa-info-circle mr-2"></i> Kenaikan Pangkat dihitung TMT Terakhir + 4 Tahun.
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Render Chart
+                if(app.chartInstance) app.chartInstance.destroy();
+                const ctx = document.getElementById('chartKgb').getContext('2d');
+                app.chartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
+                        datasets: [{
+                            label: 'Jumlah Pegawai KGB',
+                            data: kgbPerMonth,
+                            backgroundColor: '#3b82f6',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: { responsive: true, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                });
+            },
+
+            renderPegawai: (container) => {
+                const list = db.get('pegawai');
+                const mJab = db.get('master_jabatan');
+                const mPang = db.get('master_pangkat');
+
+                container.innerHTML = `
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800">Data Pegawai</h2>
+                        <button onclick="app.modalPegawai()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-sm transition"><i class="fa-solid fa-plus mr-2"></i>Tambah Pegawai</button>
+                    </div>
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <div class="p-4 border-b border-gray-100 flex gap-4">
+                            <input type="text" id="searchPegawai" placeholder="Cari Nama / NIP..." class="border border-gray-300 rounded px-3 py-2 w-full max-w-sm text-sm focus:outline-none focus:border-blue-500" onkeyup="app.filterTable('table-pegawai', 1)">
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse" id="table-pegawai">
+                                <thead class="bg-gray-50 text-gray-600 text-xs uppercase font-semibold">
+                                    <tr>
+                                        <th class="px-6 py-3 border-b">NIP</th>
+                                        <th class="px-6 py-3 border-b">Nama Pegawai</th>
+                                        <th class="px-6 py-3 border-b">Jabatan</th>
+                                        <th class="px-6 py-3 border-b">Pangkat</th>
+                                        <th class="px-6 py-3 border-b text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm text-gray-700">
+                                    ${list.map(p => `
+                                    <tr class="hover:bg-gray-50 transition">
+                                        <td class="px-6 py-4 border-b font-mono text-gray-500">${p.nip}</td>
+                                        <td class="px-6 py-4 border-b font-medium">${p.nama}</td>
+                                        <td class="px-6 py-4 border-b">${mJab.find(x=>x.id==p.jabatanId)?.nama || '-'}</td>
+                                        <td class="px-6 py-4 border-b"><span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">${mPang.find(x=>x.id==p.pangkatId)?.nama || '-'}</span></td>
+                                        <td class="px-6 py-4 border-b text-center">
+                                            <button onclick="app.deleteItem('pegawai', '${p.id}')" class="text-red-500 hover:text-red-700 p-1"><i class="fa-solid fa-trash"></i></button>
+                                        </td>
+                                    </tr>`).join('')}
+                                    ${list.length === 0 ? '<tr><td colspan="5" class="text-center py-8 text-gray-400">Belum ada data pegawai</td></tr>' : ''}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderRiwayat: (container, type) => {
+                const dbKey = type === 'kgb' ? 'riwayat_kgb' : 'riwayat_pangkat';
+                const title = type === 'kgb' ? 'Kenaikan Gaji Berkala (KGB)' : 'Kenaikan Pangkat';
+                const data = db.get(dbKey);
+                const peg = db.get('pegawai');
+                
+                // Sort by TMT DESC
+                data.sort((a,b) => b.tmt.localeCompare(a.tmt));
+
+                container.innerHTML = `
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800">Riwayat ${title}</h2>
+                        <button onclick="app.modalSK('${type}')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-sm transition"><i class="fa-solid fa-file-circle-plus mr-2"></i>Input SK Baru</button>
+                    </div>
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-gray-50 text-gray-600 text-xs uppercase font-semibold">
+                                    <tr>
+                                        <th class="px-6 py-3 border-b">Nama Pegawai</th>
+                                        <th class="px-6 py-3 border-b">No. SK</th>
+                                        <th class="px-6 py-3 border-b">TMT</th>
+                                        <th class="px-6 py-3 border-b">${type === 'kgb' ? 'Gaji Baru' : 'Pangkat Baru'}</th>
+                                        <th class="px-6 py-3 border-b">Tgl SK</th>
+                                        <th class="px-6 py-3 border-b text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm text-gray-700">
+                                    ${data.map(item => `
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 border-b font-medium">${peg.find(x=>x.id==item.pegawaiId)?.nama || 'Unknown'}</td>
+                                        <td class="px-6 py-4 border-b text-gray-500">${item.no_sk}</td>
+                                        <td class="px-6 py-4 border-b font-mono text-blue-600">${item.tmt}</td>
+                                        <td class="px-6 py-4 border-b">${type === 'kgb' ? util.formatRupiah(item.gaji) : item.pangkat_baru}</td>
+                                        <td class="px-6 py-4 border-b">${item.tgl_sk}</td>
+                                        <td class="px-6 py-4 border-b text-center">
+                                             <button onclick="app.deleteItem('${dbKey}', '${item.id}')" class="text-red-500 hover:text-red-700"><i class="fa-solid fa-trash"></i></button>
+                                        </td>
+                                    </tr>`).join('')}
+                                    ${data.length === 0 ? '<tr><td colspan="6" class="text-center py-8 text-gray-400">Belum ada data riwayat</td></tr>' : ''}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderMonitoring: (container) => {
+                // Logic Monitoring
+                const pegawai = db.get('pegawai');
+                const kgbData = db.get('riwayat_kgb');
+                const pangData = db.get('riwayat_pangkat');
+                
+                let monitoringList = [];
+
+                pegawai.forEach(p => {
+                    // KGB Check
+                    const lastKgb = kgbData.filter(x => x.pegawaiId === p.id).sort((a,b) => b.tmt.localeCompare(a.tmt))[0];
+                    if(lastKgb) {
+                        const nextDate = util.addMonths(lastKgb.tmt, 24);
+                        monitoringList.push({
+                            id: p.id, nama: p.nama, type: 'KGB', tmt_last: lastKgb.tmt, 
+                            next_date: nextDate, status: util.getStatus(nextDate)
+                        });
+                    }
+                    // Pangkat Check
+                    const lastPang = pangData.filter(x => x.pegawaiId === p.id).sort((a,b) => b.tmt.localeCompare(a.tmt))[0];
+                    if(lastPang) {
+                        const nextDate = util.addMonths(lastPang.tmt, 48); // 4 tahun
+                        monitoringList.push({
+                            id: p.id, nama: p.nama, type: 'Pangkat', tmt_last: lastPang.tmt, 
+                            next_date: nextDate, status: util.getStatus(nextDate)
+                        });
+                    }
+                });
+
+                // Sort by urgency (tanggal terdekat)
+                monitoringList.sort((a,b) => a.next_date.localeCompare(b.next_date));
+
+                container.innerHTML = `
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Monitoring Jadwal</h2>
+                    
+                    <div class="flex gap-4 mb-4 flex-wrap">
+                        <select id="filterType" class="border p-2 rounded text-sm w-40" onchange="app.applyMonitorFilter()">
+                            <option value="all">Semua Jenis</option>
+                            <option value="KGB">Kenaikan Gaji</option>
+                            <option value="Pangkat">Kenaikan Pangkat</option>
+                        </select>
+                         <select id="filterStatus" class="border p-2 rounded text-sm w-40" onchange="app.applyMonitorFilter()">
+                            <option value="all">Semua Status</option>
+                            <option value="late">Terlambat</option>
+                            <option value="due">Jatuh Tempo</option>
+                            <option value="near">Mendekati</option>
+                        </select>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <div class="overflow-x-auto table-container" style="max-height: 500px;">
+                            <table class="w-full text-left border-collapse" id="table-monitor">
+                                <thead class="bg-gray-50 text-gray-600 text-xs uppercase font-semibold table-head-sticky">
+                                    <tr>
+                                        <th class="px-6 py-3 border-b">Nama Pegawai</th>
+                                        <th class="px-6 py-3 border-b">Jenis</th>
+                                        <th class="px-6 py-3 border-b">TMT Terakhir</th>
+                                        <th class="px-6 py-3 border-b">Jadwal Berikutnya</th>
+                                        <th class="px-6 py-3 border-b">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm text-gray-700">
+                                    ${monitoringList.map(item => `
+                                    <tr class="hover:bg-gray-50 item-row" data-type="${item.type}" data-status="${item.status.code}">
+                                        <td class="px-6 py-4 border-b font-medium">${item.nama}</td>
+                                        <td class="px-6 py-4 border-b"><span class="px-2 py-1 rounded text-xs font-bold ${item.type === 'KGB' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">${item.type}</span></td>
+                                        <td class="px-6 py-4 border-b text-gray-500">${util.formatDate(item.tmt_last)}</td>
+                                        <td class="px-6 py-4 border-b font-bold">${util.formatDate(item.next_date)}</td>
+                                        <td class="px-6 py-4 border-b">
+                                            <span class="px-3 py-1 rounded-full text-xs font-bold ${item.status.color}">${item.status.text}</span>
+                                        </td>
+                                    </tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            },
+            
+            applyMonitorFilter: () => {
+                const type = document.getElementById('filterType').value;
+                const status = document.getElementById('filterStatus').value;
+                const rows = document.querySelectorAll('.item-row');
+                
+                rows.forEach(row => {
+                    const rowType = row.getAttribute('data-type');
+                    const rowStatus = row.getAttribute('data-status');
+                    let show = true;
+                    
+                    if(type !== 'all' && rowType !== type) show = false;
+                    if(status !== 'all' && rowStatus !== status) show = false;
+                    
+                    row.style.display = show ? '' : 'none';
+                });
+            },
+
+            renderMaster: (container, key) => {
+                const title = key === 'master_jabatan' ? 'Master Jabatan' : 'Master Pangkat';
+                const data = db.get(key);
+                
+                container.innerHTML = `
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800">${title}</h2>
+                        <button onclick="app.modalMaster('${key}')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-sm transition">+ Tambah</button>
+                    </div>
+                    <div class="bg-white rounded-lg shadow overflow-hidden w-full max-w-2xl">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-gray-50 text-gray-600 text-xs uppercase font-semibold">
+                                <tr>
+                                    <th class="px-6 py-3 border-b">Nama / Nilai</th>
+                                    <th class="px-6 py-3 border-b text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.map(item => `
+                                <tr class="border-b last:border-0 hover:bg-gray-50">
+                                    <td class="px-6 py-3 text-sm text-gray-700">${item.nama}</td>
+                                    <td class="px-6 py-3 text-right">
+                                        <button onclick="app.deleteItem('${key}', '${item.id}')" class="text-red-500 text-xs uppercase font-bold hover:underline">Hapus</button>
+                                    </td>
+                                </tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            },
+
+            // --- MODAL HANDLERS ---
+            
+            closeModal: () => {
+                document.getElementById('modal').classList.add('hidden');
+            },
+
+            modalPegawai: () => {
+                const jabs = db.get('master_jabatan').map(j => `<option value="${j.id}">${j.nama}</option>`).join('');
+                const pangs = db.get('master_pangkat').map(p => `<option value="${p.id}">${p.nama}</option>`).join('');
+                
+                const html = `
+                    <form id="form-data" class="space-y-4">
+                        <div><label class="block text-sm font-medium text-gray-700">NIP</label><input type="number" name="nip" class="mt-1 w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500" required></div>
+                        <div><label class="block text-sm font-medium text-gray-700">Nama Lengkap</label><input type="text" name="nama" class="mt-1 w-full border border-gray-300 rounded p-2" required></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-medium text-gray-700">Jabatan</label><select name="jabatanId" class="mt-1 w-full border border-gray-300 rounded p-2 bg-white">${jabs}</select></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Pangkat</label><select name="pangkatId" class="mt-1 w-full border border-gray-300 rounded p-2 bg-white">${pangs}</select></div>
+                        </div>
+                    </form>
+                `;
+                app.showModal('Tambah Pegawai', html, () => {
+                    const data = app.getFormData();
+                    if(!data.nip || !data.nama) return alert("Mohon lengkapi data");
+                    const list = db.get('pegawai');
+                    list.push({...data, id: Date.now().toString()});
+                    db.set('pegawai', list);
+                    app.navigate('pegawai');
+                });
+            },
+
+            modalSK: (type) => {
+                const pegs = db.get('pegawai').map(p => `<option value="${p.id}">${p.nama} (${p.nip})</option>`).join('');
+                const extraField = type === 'kgb' 
+                    ? `<div><label class="block text-sm font-medium text-gray-700">Gaji Baru (Rp)</label><input type="number" name="gaji" class="mt-1 w-full border border-gray-300 rounded p-2" required></div>`
+                    : `<div><label class="block text-sm font-medium text-gray-700">Pangkat Baru</label><input type="text" name="pangkat_baru" class="mt-1 w-full border border-gray-300 rounded p-2" placeholder="Contoh: III/b" required></div>`;
+                
+                const html = `
+                    <form id="form-data" class="space-y-4">
+                        <div><label class="block text-sm font-medium text-gray-700">Pilih Pegawai</label><select name="pegawaiId" class="mt-1 w-full border border-gray-300 rounded p-2 bg-white">${pegs}</select></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-medium text-gray-700">Nomor SK</label><input
