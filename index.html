@@ -1,681 +1,865 @@
 <!DOCTYPE html>
 <html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Monitoring KGB & Pangkat ASN</title>
-    
-    <!-- Tailwind CSS -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ASN Monitor - KGB & Pangkat</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
+    <!-- Babel for in-browser compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-        
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
-        /* Sticky Header Logic */
-        .table-container { max-height: 70vh; overflow: auto; }
-        thead th { position: sticky; top: 0; z-index: 10; background-color: #f8fafc; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-
-        /* Transitions */
-        .fade-in { animation: fadeIn 0.3s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f3f4f6;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8; 
+      }
+      @keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      .animate-fade-in {
+        animation: fade-in 0.3s ease-out;
+      }
+      @keyframes slide-in {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      .animate-slide-in {
+        animation: slide-in 0.3s ease-out;
+      }
     </style>
-</head>
-<body class="text-slate-800 h-screen overflow-hidden flex">
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.22.3",
+    "lucide-react": "https://esm.sh/lucide-react@0.363.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.8",
+    "xlsx": "https://esm.sh/xlsx@0.18.5",
+    "recharts": "https://esm.sh/recharts@2.12.3",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
+  }
+}
+</script>
+  </head>
+  <body>
+    <div id="root"></div>
 
-    <!-- SIDEBAR -->
-    <aside id="sidebar" class="bg-slate-900 text-white w-64 flex-shrink-0 hidden md:flex flex-col transition-all duration-300 z-50 absolute h-full md:relative">
-        <div class="h-16 flex items-center px-6 border-b border-slate-700">
-            <i class="fa-solid fa-user-shield text-blue-400 text-xl mr-3"></i>
-            <span class="font-bold text-lg tracking-wide">MONITORING ASN</span>
-        </div>
+    <script type="text/babel" data-type="module" data-presets="typescript,react">
+      import React, { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from 'react';
+      import ReactDOM from 'react-dom/client';
+      import { HashRouter, Routes, Route, Link, useLocation, Navigate, Outlet, useNavigate } from 'react-router-dom';
+      import { createClient } from '@supabase/supabase-js';
+      import * as XLSX from 'xlsx';
+      import { 
+        LayoutDashboard, Users, Bell, Menu, FileText, BarChart2, Briefcase, Award, 
+        CheckCircle, AlertTriangle, Info, LogOut, Loader2, FolderOpen, 
+        Clock, AlertCircle, Edit, Save, X, Search, Filter, ChevronLeft, ChevronRight, 
+        Download, Upload, FileSpreadsheet, ExternalLink, ArrowRight, UserPlus, Lock, Mail, LogIn 
+      } from 'lucide-react';
+      import { 
+        PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, 
+        BarChart, Bar, XAxis, YAxis, CartesianGrid 
+      } from 'recharts';
 
-        <nav class="flex-1 overflow-y-auto py-4">
-            <div class="px-4 text-xs font-semibold text-slate-400 uppercase mb-2">Utama</div>
-            <a onclick="App.router('dashboard')" class="nav-link flex items-center px-6 py-3 hover:bg-slate-800 cursor-pointer text-slate-300 hover:text-white transition-colors border-l-4 border-transparent">
-                <i class="fa-solid fa-chart-line w-6"></i> Dashboard
-            </a>
-            <a onclick="App.router('monitoring')" class="nav-link flex items-center px-6 py-3 hover:bg-slate-800 cursor-pointer text-slate-300 hover:text-white transition-colors border-l-4 border-transparent">
-                <i class="fa-solid fa-clock w-6"></i> Monitoring Jadwal
-            </a>
+      // --- CONFIGURATION ---
+      const SUPABASE_URL = 'https://qcmbwjaivnqeuifwkxzf.supabase.co';
+      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFjbWJ3amFpdm5xZXVpZndreHpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3MDU2NjgsImV4cCI6MjA4NjI4MTY2OH0.rHgEdXzgqZlx4BL_LlADp4f7-yoAhw4OsXcYj25I7hw';
+      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-            <div class="px-4 text-xs font-semibold text-slate-400 uppercase mb-2 mt-6">Kepegawaian</div>
-            <a onclick="App.router('pegawai')" class="nav-link flex items-center px-6 py-3 hover:bg-slate-800 cursor-pointer text-slate-300 hover:text-white transition-colors border-l-4 border-transparent">
-                <i class="fa-solid fa-users w-6"></i> Data Pegawai
-            </a>
-            <a onclick="App.router('sk_kgb')" class="nav-link flex items-center px-6 py-3 hover:bg-slate-800 cursor-pointer text-slate-300 hover:text-white transition-colors border-l-4 border-transparent">
-                <i class="fa-solid fa-money-bill-wave w-6"></i> Riwayat KGB
-            </a>
-            <a onclick="App.router('sk_pangkat')" class="nav-link flex items-center px-6 py-3 hover:bg-slate-800 cursor-pointer text-slate-300 hover:text-white transition-colors border-l-4 border-transparent">
-                <i class="fa-solid fa-medal w-6"></i> Riwayat Pangkat
-            </a>
+      // --- UTILS ---
+      const formatDate = (date) => {
+        if (!date) return '-';
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '-';
+        return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      };
 
-            <div class="px-4 text-xs font-semibold text-slate-400 uppercase mb-2 mt-6">Master Data</div>
-            <a onclick="App.router('master_jabatan')" class="nav-link flex items-center px-6 py-3 hover:bg-slate-800 cursor-pointer text-slate-300 hover:text-white transition-colors border-l-4 border-transparent">
-                <i class="fa-solid fa-briefcase w-6"></i> Master Jabatan
-            </a>
-            <a onclick="App.router('master_pangkat')" class="nav-link flex items-center px-6 py-3 hover:bg-slate-800 cursor-pointer text-slate-300 hover:text-white transition-colors border-l-4 border-transparent">
-                <i class="fa-solid fa-layer-group w-6"></i> Master Pangkat
-            </a>
-        </nav>
-    </aside>
+      const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
+      };
 
-    <!-- MAIN CONTENT -->
-    <main class="flex-1 flex flex-col h-full relative">
-        <!-- Header Mobile -->
-        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm md:hidden z-40">
-            <span class="font-bold text-slate-800">SIMPEG MONITORING</span>
-            <button onclick="document.getElementById('sidebar').classList.toggle('hidden')" class="text-slate-600">
-                <i class="fa-solid fa-bars text-xl"></i>
-            </button>
-        </header>
+      const calculateNextDate = (lastTmt, type) => {
+        const date = new Date(lastTmt);
+        const yearsToAdd = type === 'KGB' ? 2 : 4;
+        date.setFullYear(date.getFullYear() + yearsToAdd);
+        return date;
+      };
 
-        <!-- Content Area -->
-        <div id="app-content" class="flex-1 overflow-auto p-4 md:p-8 relative">
-            <!-- Dynamic Content injected here -->
-        </div>
-    </main>
+      const exportToExcel = (data, fileName) => {
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Data");
+        const dateStr = new Date().toISOString().slice(0,10);
+        XLSX.writeFile(wb, `${fileName}_${dateStr}.xlsx`);
+      };
 
-    <!-- MODAL -->
-    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm p-4">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all scale-100 fade-in">
-            <div class="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-                <h3 id="modal-title" class="text-lg font-bold text-slate-800">Judul Modal</h3>
-                <button onclick="UI.closeModal()" class="text-slate-400 hover:text-red-500 transition"><i class="fa-solid fa-times"></i></button>
+      const readExcelFile = (file) => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const data = new Uint8Array(e.target?.result);
+              const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+              const sheetName = workbook.SheetNames[0];
+              const sheet = workbook.Sheets[sheetName];
+              const json = XLSX.utils.sheet_to_json(sheet);
+              resolve(json);
+            } catch (error) {
+              reject(error);
+            }
+          };
+          reader.onerror = (error) => reject(error);
+          reader.readAsArrayBuffer(file);
+        });
+      };
+
+      // --- SERVICES (Flattened) ---
+      // Auth
+      const signUp = async (email, password) => {
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        return { data, error };
+      };
+      const signIn = async (email, password) => {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        return { data, error };
+      };
+      const signOut = async () => {
+        const { error } = await supabase.auth.signOut();
+        return { error };
+      };
+
+      // Storage
+      const getPositions = async () => {
+        const { data, error } = await supabase.from('positions').select('*');
+        if (error) console.error(error);
+        return data || [];
+      };
+      const savePosition = async (item) => {
+        const { error } = await supabase.from('positions').upsert(item);
+        if (error) throw error;
+        return getPositions();
+      };
+      const deletePosition = async (id) => {
+        const { error } = await supabase.from('positions').delete().eq('id', id);
+        if (error) throw error;
+        return getPositions();
+      };
+
+      const getRanks = async () => {
+        const { data, error } = await supabase.from('ranks').select('*');
+        if (error) console.error(error);
+        return data || [];
+      };
+      const saveRank = async (item) => {
+        const { error } = await supabase.from('ranks').upsert(item);
+        if (error) throw error;
+        return getRanks();
+      };
+      const deleteRank = async (id) => {
+        const { error } = await supabase.from('ranks').delete().eq('id', id);
+        if (error) throw error;
+        return getRanks();
+      };
+
+      const getEmployees = async (onlyActive = false) => {
+        let query = supabase.from('employees').select('*');
+        if (onlyActive) query = query.eq('isActive', true);
+        const { data, error } = await query;
+        if (error) console.error(error);
+        return data || [];
+      };
+      const saveEmployee = async (item) => {
+        const dbPayload = {
+          id: item.id,
+          nip: item.nip,
+          name: item.name,
+          positionId: item.positionId,
+          rankId: item.rankId || null,
+          isActive: item.isActive,
+          createdAt: item.createdAt
+        };
+        const { error } = await supabase.from('employees').upsert(dbPayload);
+        if (error) throw new Error(error.message);
+        return getEmployees();
+      };
+      const deleteEmployee = async (id) => {
+        const { error } = await supabase.from('employees').delete().eq('id', id);
+        if (error) throw error;
+        return getEmployees();
+      };
+
+      const getSKs = async (type, employeeId) => {
+        let query = supabase.from('sks').select('*');
+        if (type) query = query.eq('type', type);
+        if (employeeId) query = query.eq('employeeId', employeeId);
+        const { data, error } = await query;
+        if (error) console.error(error);
+        const list = data || [];
+        return list.sort((a, b) => new Date(b.tmtDate).getTime() - new Date(a.tmtDate).getTime());
+      };
+      const saveSK = async (item) => {
+        const { error } = await supabase.from('sks').upsert(item);
+        if (error) throw error;
+        if (item.type === 'PANGKAT') {
+          await supabase.from('employees').update({ rankId: item.rankId }).eq('id', item.employeeId);
+        }
+        return getSKs(item.type);
+      };
+      const deleteSK = async (id) => {
+        const { data } = await supabase.from('sks').select('type').eq('id', id).single();
+        const type = data?.type;
+        const { error } = await supabase.from('sks').delete().eq('id', id);
+        if (error) throw error;
+        return getSKs(type);
+      };
+
+      const getMonitoringNotes = async () => {
+        const { data, error } = await supabase.from('monitoring_notes').select('*');
+        if (error) console.error(error);
+        return data || [];
+      };
+      const saveMonitoringNote = async (note) => {
+        const { error } = await supabase.from('monitoring_notes').upsert(note);
+        if (error) throw error;
+        return getMonitoringNotes();
+      };
+
+      // --- CONTEXT ---
+      const DataContext = createContext(undefined);
+
+      const DataProvider = ({ children }) => {
+        const [employees, setEmployees] = useState([]);
+        const [sks, setSks] = useState([]);
+        const [ranks, setRanks] = useState([]);
+        const [positions, setPositions] = useState([]);
+        const [monitoringNotes, setMonitoringNotes] = useState([]);
+        const [isLoading, setIsLoading] = useState(true);
+        const [session, setSession] = useState(null);
+
+        useEffect(() => {
+          supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+          const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+          return () => subscription.unsubscribe();
+        }, []);
+
+        const refreshData = useCallback(async () => {
+          if (!session) {
+            setIsLoading(false);
+            return;
+          }
+          setIsLoading(true);
+          try {
+            const [empData, skData, rankData, posData, noteData] = await Promise.all([
+              getEmployees(),
+              getSKs(),
+              getRanks(),
+              getPositions(),
+              getMonitoringNotes()
+            ]);
+            setEmployees(empData);
+            setSks(skData);
+            setRanks(rankData);
+            setPositions(posData);
+            setMonitoringNotes(noteData);
+          } catch (error) {
+            console.error("Failed to fetch data", error);
+          } finally {
+            setIsLoading(false);
+          }
+        }, [session]);
+
+        useEffect(() => {
+          refreshData();
+        }, [refreshData]);
+
+        return (
+          <DataContext.Provider value={{ employees, sks, ranks, positions, monitoringNotes, isLoading, refreshData }}>
+            {children}
+          </DataContext.Provider>
+        );
+      };
+
+      const useData = () => {
+        const context = useContext(DataContext);
+        if (context === undefined) throw new Error('useData must be used within a DataProvider');
+        return context;
+      };
+
+      // --- COMPONENTS ---
+
+      // ConfirmModal
+      const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
+        if (!isOpen) return null;
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 transform transition-all scale-100">
+              <div className="flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                  <AlertTriangle className="text-red-600" size={24} />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
+                <p className="text-sm text-gray-500 mb-6">{message}</p>
+                <div className="flex gap-3 w-full">
+                  <button onClick={onCancel} className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">Batal</button>
+                  <button onClick={onConfirm} className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors shadow-sm">Hapus</button>
+                </div>
+              </div>
             </div>
-            <div id="modal-body" class="p-6 max-h-[70vh] overflow-y-auto">
-                <!-- Form Content -->
+          </div>
+        );
+      };
+
+      // EmployeeForm
+      const EmployeeForm = ({ isOpen, initialData, positions, onClose, onSave }) => {
+        const [formData, setFormData] = useState({ name: '', nip: '', positionId: '', isActive: true });
+        useEffect(() => {
+          if (isOpen) {
+            setFormData(initialData || { id: undefined, name: '', nip: '', positionId: '', isActive: true });
+          }
+        }, [isOpen, initialData]);
+
+        if (!isOpen) return null;
+
+        const handleSubmit = (e) => {
+          e.preventDefault();
+          if (!formData.name || !formData.nip || !formData.positionId) return;
+          const selectedPosition = positions.find(p => p.id === formData.positionId);
+          const newEmployee = {
+            id: formData.id || crypto.randomUUID(),
+            name: formData.name,
+            nip: formData.nip,
+            positionId: formData.positionId,
+            position: selectedPosition ? selectedPosition.name : '',
+            createdAt: formData.createdAt || Date.now(),
+            isActive: formData.isActive ?? true
+          };
+          onSave(newEmployee);
+          onClose();
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h2 className="text-xl font-bold text-gray-800">{initialData ? 'Edit Data Pegawai' : 'Tambah Pegawai Baru'}</h2>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={24} /></button>
+              </div>
+              <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label><input type="text" required className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">NIP</label><input type="number" required className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={formData.nip || ''} onChange={e => setFormData({...formData, nip: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Jabatan</label><select required className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.positionId || ''} onChange={e => setFormData({...formData, positionId: e.target.value})}><option value="">- Pilih Jabatan -</option>{positions.map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}</select></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Status Pegawai</label><select className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.isActive ? 'active' : 'inactive'} onChange={e => setFormData({...formData, isActive: e.target.value === 'active'})}><option value="active">Aktif</option><option value="inactive">Non-Aktif / Pensiun / Pindah</option></select></div>
+                <div className="pt-4"><button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2"><Save size={20} /> Simpan Data</button></div>
+              </form>
             </div>
-            <div class="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
-                <button onclick="UI.closeModal()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition">Batal</button>
-                <button id="modal-save-btn" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow transition">Simpan</button>
+          </div>
+        );
+      };
+
+      // Login
+      const Login = ({ notify }) => {
+        const [email, setEmail] = useState('');
+        const [password, setPassword] = useState('');
+        const [loading, setLoading] = useState(false);
+        const navigate = useNavigate();
+
+        const handleLogin = async (e) => {
+          e.preventDefault();
+          setLoading(true);
+          const { error } = await signIn(email, password);
+          if (error) {
+            notify(error.message, 'error');
+          } else {
+            notify('Login berhasil!', 'success');
+            navigate('/');
+          }
+          setLoading(false);
+        };
+
+        return (
+          <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center p-4">
+            <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
+              <div className="p-8">
+                <div className="text-center mb-8">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4"><Lock className="w-8 h-8 text-blue-600" /></div>
+                  <h2 className="text-2xl font-bold text-gray-900">Selamat Datang</h2>
+                  <p className="text-gray-500 text-sm mt-2">Silakan login untuk mengakses Sistem Monitoring ASN</p>
+                </div>
+                <form onSubmit={handleLogin} className="space-y-6">
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Email</label><div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Mail className="h-5 w-5 text-gray-400" /></div><input type="email" required className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="nama@email.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Password</label><div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-gray-400" /></div><input type="password" required className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} /></div></div>
+                  <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg shadow-md flex items-center justify-center gap-2 disabled:opacity-70">{loading ? <Loader2 className="animate-spin" size={20} /> : <LogIn size={20} />} Login</button>
+                </form>
+                <div className="mt-6 text-center text-sm text-gray-600">Belum punya akun? <Link to="/register" className="text-blue-600 hover:underline font-medium">Daftar disini</Link></div>
+              </div>
             </div>
+          </div>
+        );
+      };
+
+      // Register
+      const Register = ({ notify }) => {
+        const [email, setEmail] = useState('');
+        const [password, setPassword] = useState('');
+        const [confirmPassword, setConfirmPassword] = useState('');
+        const [loading, setLoading] = useState(false);
+        const navigate = useNavigate();
+
+        const handleRegister = async (e) => {
+          e.preventDefault();
+          if (password !== confirmPassword) return notify('Password konfirmasi tidak cocok', 'error');
+          if (password.length < 6) return notify('Password minimal 6 karakter', 'error');
+          setLoading(true);
+          const { error } = await signUp(email, password);
+          if (error) {
+            notify(error.message, 'error');
+          } else {
+            notify('Pendaftaran berhasil! Silakan login.', 'success');
+            navigate('/login');
+          }
+          setLoading(false);
+        };
+
+        return (
+          <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center p-4">
+            <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
+              <div className="p-8">
+                <div className="text-center mb-8">
+                  <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4"><UserPlus className="w-8 h-8 text-emerald-600" /></div>
+                  <h2 className="text-2xl font-bold text-gray-900">Buat Akun Baru</h2>
+                  <p className="text-gray-500 text-sm mt-2">Daftar untuk mengakses sistem</p>
+                </div>
+                <form onSubmit={handleRegister} className="space-y-5">
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Email</label><input type="email" required className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Password</label><input type="password" required minLength={6} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Konfirmasi Password</label><input type="password" required className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} /></div>
+                  <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-lg shadow-md flex items-center justify-center gap-2 disabled:opacity-70">{loading ? <Loader2 className="animate-spin" size={20} /> : <UserPlus size={20} />} Daftar Sekarang</button>
+                </form>
+                <div className="mt-6 text-center text-sm text-gray-600">Sudah punya akun? <Link to="/login" className="text-blue-600 hover:underline font-medium">Login disini</Link></div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // --- FEATURE COMPONENTS ---
+      
+      const Dashboard = () => {
+        const { employees, sks } = useData();
+        const activeEmployees = useMemo(() => employees.filter(e => e.isActive), [employees]);
+        const { stats, chartData, urgentItems, nextYearProjection } = useMemo(() => {
+          let kgbSafe = 0, kgbWarning = 0, kgbLate = 0;
+          let rankSafe = 0, rankWarning = 0, rankLate = 0;
+          const monthsMap = {};
+          const today = new Date();
+          today.setHours(0,0,0,0);
+          for (let i = 0; i < 12; i++) {
+            const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+            const key = `${d.getFullYear()}-${d.getMonth()}`;
+            const monthName = d.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' });
+            monthsMap[key] = { name: monthName, kgb: 0, rank: 0, sortKey: d.getTime() };
+          }
+          const urgentList = [];
+          let projectedKgbCount = 0;
+          let projectedRankCount = 0;
+          const skMap = {};
+          sks.forEach(sk => { if(!skMap[sk.employeeId]) skMap[sk.employeeId] = []; skMap[sk.employeeId].push(sk); });
+
+          const calculateStatus = (targetDate) => {
+            const diffTime = targetDate.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays < 0) return 'LATE';
+            if (diffDays <= 90) return 'DUE';
+            if (diffDays <= 180) return 'WARNING';
+            return 'SAFE';
+          };
+
+          activeEmployees.forEach(emp => {
+            const empSKs = skMap[emp.id] || [];
+            const kgbSKs = empSKs.filter(s => s.type === 'KGB').sort((a,b) => new Date(b.tmtDate).getTime() - new Date(a.tmtDate).getTime());
+            if (kgbSKs.length > 0) {
+              const nextKgbDate = new Date(kgbSKs[0].tmtDate);
+              nextKgbDate.setFullYear(nextKgbDate.getFullYear() + 2);
+              const status = calculateStatus(nextKgbDate);
+              if (status === 'LATE') { kgbLate++; urgentList.push({ id: emp.id+'kgb', name: emp.name, nip: emp.nip, type: 'KGB', date: nextKgbDate, status: 'LATE' }); }
+              else if (status === 'DUE') { kgbWarning++; urgentList.push({ id: emp.id+'kgb', name: emp.name, nip: emp.nip, type: 'KGB', date: nextKgbDate, status: 'DUE' }); }
+              else if (status === 'WARNING') kgbWarning++;
+              else kgbSafe++;
+              const key = `${nextKgbDate.getFullYear()}-${nextKgbDate.getMonth()}`;
+              if (monthsMap[key]) monthsMap[key].kgb++;
+              const diffDays = Math.ceil((nextKgbDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+              if (diffDays > 0 && diffDays <= 365) projectedKgbCount++;
+            }
+            const rankSKs = empSKs.filter(s => s.type === 'PANGKAT').sort((a,b) => new Date(b.tmtDate).getTime() - new Date(a.tmtDate).getTime());
+            if (rankSKs.length > 0) {
+              const nextRankDate = new Date(rankSKs[0].tmtDate);
+              nextRankDate.setFullYear(nextRankDate.getFullYear() + 4);
+              const status = calculateStatus(nextRankDate);
+              if (status === 'LATE') { rankLate++; urgentList.push({ id: emp.id+'rank', name: emp.name, nip: emp.nip, type: 'PANGKAT', date: nextRankDate, status: 'LATE' }); }
+              else if (status === 'DUE') { rankWarning++; urgentList.push({ id: emp.id+'rank', name: emp.name, nip: emp.nip, type: 'PANGKAT', date: nextRankDate, status: 'DUE' }); }
+              else if (status === 'WARNING') rankWarning++;
+              else rankSafe++;
+              const key = `${nextRankDate.getFullYear()}-${nextRankDate.getMonth()}`;
+              if (monthsMap[key]) monthsMap[key].rank++;
+              const diffDays = Math.ceil((nextRankDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+              if (diffDays > 0 && diffDays <= 365) projectedRankCount++;
+            }
+          });
+          urgentList.sort((a, b) => {
+             const priority = { 'LATE': 0, 'DUE': 1, 'WARNING': 2 };
+             if (priority[a.status] !== priority[b.status]) return priority[a.status] - priority[b.status];
+             return a.date.getTime() - b.date.getTime();
+          });
+          return { stats: { kgbSafe, kgbWarning, kgbLate, rankSafe, rankWarning, rankLate }, chartData: Object.values(monthsMap).sort((a, b) => a.sortKey - b.sortKey), urgentItems: urgentList.slice(0, 5), nextYearProjection: { kgb: projectedKgbCount, rank: projectedRankCount } };
+        }, [activeEmployees, sks]);
+        
+        const kgbPieData = [{ name: 'Aman', value: stats.kgbSafe, color: '#10b981' }, { name: 'Mendekati', value: stats.kgbWarning, color: '#f59e0b' }, { name: 'Terlambat', value: stats.kgbLate, color: '#ef4444' }].filter(d => d.value > 0);
+        const rankPieData = [{ name: 'Aman', value: stats.rankSafe, color: '#3b82f6' }, { name: 'Mendekati', value: stats.rankWarning, color: '#f59e0b' }, { name: 'Terlambat', value: stats.rankLate, color: '#ef4444' }].filter(d => d.value > 0);
+
+        return (
+          <div className="space-y-6 animate-fade-in pb-10">
+            <div className="flex justify-between items-end"><div><h1 className="text-2xl font-bold text-gray-800">Dashboard Monitoring</h1><p className="text-gray-500 text-sm mt-1">Ringkasan status kepegawaian dan proyeksi beban kerja.</p></div><div className="text-right hidden sm:block"><div className="text-sm font-semibold text-gray-700">{new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}</div></div></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+               <StatCard icon={<Users className="w-6 h-6 text-blue-600" />} title="Total Pegawai" value={activeEmployees.length} subtitle="Pegawai Aktif" color="bg-white border-blue-100" />
+               <StatCard icon={<FileText className="w-6 h-6 text-emerald-600" />} title="Proyeksi KGB" value={nextYearProjection.kgb} subtitle="12 Bulan Kedepan" color="bg-white border-emerald-100" />
+               <StatCard icon={<Award className="w-6 h-6 text-purple-600" />} title="Proyeksi Pangkat" value={nextYearProjection.rank} subtitle="12 Bulan Kedepan" color="bg-white border-purple-100" />
+               <StatCard icon={<AlertCircle className="w-6 h-6 text-red-600" />} title="Perlu Perhatian" value={stats.kgbLate + stats.rankLate + stats.kgbWarning + stats.rankWarning} subtitle="Terlambat / Tempo" color="bg-red-50 border-red-200" isAlert />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+               <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                  <h3 className="text-lg font-bold text-gray-800 mb-6">Timeline Kenaikan (12 Bulan)</h3>
+                  <div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="name" tick={{fontSize: 11}} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{fontSize: 11}} axisLine={false} tickLine={false} /><RechartsTooltip /><Bar dataKey="kgb" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} name="KGB" /><Bar dataKey="rank" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Pangkat" /></BarChart></ResponsiveContainer></div>
+               </div>
+               <div className="space-y-6">
+                  <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col h-[180px]"><h3 className="text-sm font-semibold text-gray-600 mb-2">Kesehatan KGB</h3><div className="flex-1 flex items-center"><div className="w-1/2 h-full"><ResponsiveContainer><PieChart><Pie data={kgbPieData} cx="50%" cy="50%" innerRadius={35} outerRadius={50} paddingAngle={2} dataKey="value">{kgbPieData.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><RechartsTooltip /></PieChart></ResponsiveContainer></div><div className="w-1/2 space-y-2 text-xs"><div>Aman <span className="font-bold text-emerald-600">{stats.kgbSafe}</span></div><div>Tempo <span className="font-bold text-amber-500">{stats.kgbWarning}</span></div><div>Telat <span className="font-bold text-red-500">{stats.kgbLate}</span></div></div></div></div>
+                  <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col h-[180px]"><h3 className="text-sm font-semibold text-gray-600 mb-2">Kesehatan Pangkat</h3><div className="flex-1 flex items-center"><div className="w-1/2 h-full"><ResponsiveContainer><PieChart><Pie data={rankPieData} cx="50%" cy="50%" innerRadius={35} outerRadius={50} paddingAngle={2} dataKey="value">{rankPieData.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><RechartsTooltip /></PieChart></ResponsiveContainer></div><div className="w-1/2 space-y-2 text-xs"><div>Aman <span className="font-bold text-blue-600">{stats.rankSafe}</span></div><div>Tempo <span className="font-bold text-amber-500">{stats.rankWarning}</span></div><div>Telat <span className="font-bold text-red-500">{stats.rankLate}</span></div></div></div></div>
+               </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-red-50"><h3 className="text-lg font-bold text-red-800 flex items-center gap-2"><AlertTriangle size={20}/> Prioritas Tindakan</h3><Link to="/monitoring" className="text-xs font-semibold text-red-600 flex items-center gap-1">Lihat Semua <ArrowRight size={14} /></Link></div>
+               <div className="overflow-x-auto"><table className="w-full text-left"><thead className="bg-gray-50 text-gray-500 text-xs uppercase font-semibold"><tr><th className="p-4">Pegawai</th><th className="p-4">Jenis</th><th className="p-4">TMT</th><th className="p-4">Status</th><th className="p-4 text-center">Aksi</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{urgentItems.length > 0 ? urgentItems.map(item => (<tr key={item.id} className="hover:bg-gray-50"><td className="p-4"><div className="font-semibold text-gray-900">{item.name}</div><div className="text-gray-500 text-xs">{item.nip}</div></td><td className="p-4"><span className={`px-2 py-1 rounded text-xs font-bold border ${item.type === 'KGB' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{item.type}</span></td><td className="p-4 font-medium text-gray-700">{formatDate(item.date)}</td><td className="p-4">{item.status === 'LATE' ? <span className="text-red-600 font-bold text-xs flex items-center gap-1"><AlertCircle size={14}/> TERLAMBAT</span> : <span className="text-orange-600 font-bold text-xs flex items-center gap-1"><Clock size={14}/> TEMPO</span>}</td><td className="p-4 text-center"><Link to="/monitoring" className="text-blue-600 hover:underline text-xs">Proses</Link></td></tr>)) : <tr><td colSpan={5} className="p-8 text-center text-gray-500">Tidak ada tindakan mendesak.</td></tr>}</tbody></table></div>
+            </div>
+          </div>
+        );
+      };
+      const StatCard = ({ icon, title, value, subtitle, color, isAlert }) => (
+        <div className={`p-5 rounded-xl border ${color} shadow-sm transition-all hover:shadow-md ${isAlert ? 'bg-red-50' : 'bg-white'}`}>
+           <div className="flex justify-between items-start"><div><p className={`text-sm font-medium ${isAlert ? 'text-red-600' : 'text-gray-500'}`}>{title}</p><h3 className={`text-3xl font-bold mt-2 ${isAlert ? 'text-red-700' : 'text-gray-800'}`}>{value}</h3></div><div className={`p-2 rounded-lg ${isAlert ? 'bg-red-100' : 'bg-gray-50'}`}>{icon}</div></div><p className={`text-xs mt-3 ${isAlert ? 'text-red-500' : 'text-gray-400'}`}>{subtitle}</p>
         </div>
-    </div>
+      );
 
-    <!-- TOAST NOTIFICATION -->
-    <div id="toast" class="fixed bottom-5 right-5 z-[60] transform translate-y-20 transition-transform duration-300">
-        <div class="bg-slate-800 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3">
-            <i class="fa-solid fa-check-circle text-green-400"></i>
-            <span id="toast-message" class="text-sm font-medium">Berhasil disimpan</span>
-        </div>
-    </div>
+      const Monitoring = () => {
+        const { employees, sks, ranks, monitoringNotes, refreshData } = useData();
+        const [search, setSearch] = useState('');
+        const [showSafe, setShowSafe] = useState(false);
+        const [currentPage, setCurrentPage] = useState(1);
+        const [isModalOpen, setIsModalOpen] = useState(false);
+        const [currentEvent, setCurrentEvent] = useState(null);
+        const [noteText, setNoteText] = useState('');
+        const [isConfirmed, setIsConfirmed] = useState(false);
+        const itemsPerPage = 10;
 
-    <script>
-        /**
-         * ==========================================
-         * 1. CORE SYSTEM & DATABASE (LocalStorage)
-         * ==========================================
-         */
-        const DB = {
-            get: (key) => JSON.parse(localStorage.getItem(key)) || [],
-            set: (key, data) => localStorage.setItem(key, JSON.stringify(data)),
-            
-            init: () => {
-                if(!localStorage.getItem('pegawai')) {
-                    console.log("Seeding Initial Data...");
-                    DB.set('master_jabatan', [
-                        {id: 'j1', nama: 'Pranata Komputer Ahli Muda'},
-                        {id: 'j2', nama: 'Analis Kepegawaian'},
-                        {id: 'j3', nama: 'Guru Madya'}
-                    ]);
-                    DB.set('master_pangkat', [
-                        {id: 'p1', pangkat: 'Penata Muda', gol: 'III/a'},
-                        {id: 'p2', pangkat: 'Penata Muda Tk.I', gol: 'III/b'},
-                        {id: 'p3', pangkat: 'Penata', gol: 'III/c'}
-                    ]);
-                    DB.set('pegawai', [
-                        {id: '101', nip: '199001012015011001', nama: 'Budi Santoso', jabatanId: 'j1', pangkatId: 'p2'},
-                        {id: '102', nip: '199205052019032005', nama: 'Siti Aminah', jabatanId: 'j2', pangkatId: 'p1'}
-                    ]);
-                    // History Seed
-                    const today = new Date();
-                    // Case 1: Mendekati KGB (2 tahun lalu - 1 bulan)
-                    const tmtKgb = new Date(today.getFullYear()-2, today.getMonth()+1, 1).toISOString().split('T')[0];
-                    DB.set('sk_kgb', [
-                        {id: 'k1', pegawaiId: '101', no_sk: '800/KGB/01', tmt: tmtKgb, gaji: 3500000, tgl_sk: '2022-01-01', ket: 'KGB Berkala'}
-                    ]);
-                    // Case 2: Pangkat Aman
-                    const tmtPangkat = new Date(today.getFullYear()-1, 0, 1).toISOString().split('T')[0];
-                    DB.set('sk_pangkat', [
-                        {id: 'pk1', pegawaiId: '101', no_sk: '820/KP/05', tmt: tmtPangkat, pangkatId: 'p2', tgl_sk: '2023-01-01', ket: 'Kenaikan Pangkat Reguler'}
-                    ]);
-                }
-            }
+        useEffect(() => setCurrentPage(1), [search, showSafe]);
+
+        const events = useMemo(() => {
+          const activeEmployees = employees.filter(e => e.isActive);
+          const generatedEvents = [];
+          const skMap = {};
+          sks.forEach(sk => { if(!skMap[sk.employeeId]) skMap[sk.employeeId] = []; skMap[sk.employeeId].push(sk); });
+          activeEmployees.forEach(emp => {
+             const rank = ranks.find(r => r.id === emp.rankId);
+             const rankName = rank ? rank.name : '-';
+             const golongan = rank ? rank.golongan : '-';
+             const empSKs = skMap[emp.id] || [];
+             const calculateStatus = (dueDate) => {
+               const diffDays = Math.ceil((new Date(dueDate).setHours(0,0,0,0) - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24));
+               if (diffDays < 0) return 'TERLAMBAT';
+               if (diffDays <= 90) return 'JATUH_TEMPO';
+               if (diffDays <= 180) return 'MENDEKATI';
+               return 'AMAN';
+             };
+             const processType = (type, yearsInterval) => {
+               const typeSKs = empSKs.filter(sk => sk.type === type).sort((a,b) => new Date(b.tmtDate).getTime() - new Date(a.tmtDate).getTime());
+               if(typeSKs.length > 0) {
+                 const nextDate = new Date(typeSKs[0].tmtDate);
+                 nextDate.setFullYear(nextDate.getFullYear() + yearsInterval);
+                 const noteId = `${emp.id}_${type}_${nextDate.getFullYear()}`;
+                 generatedEvents.push({ id: noteId, employeeId: emp.id, nip: emp.nip, name: emp.name, rankName, golongan, lastTmt: typeSKs[0].tmtDate, type, nextTmt: nextDate, status: calculateStatus(nextDate), noteData: monitoringNotes.find(n => n.id === noteId) });
+               }
+             };
+             processType('KGB', 2); processType('PANGKAT', 4);
+          });
+          const statusPriority = { 'TERLAMBAT': 0, 'JATUH_TEMPO': 1, 'MENDEKATI': 2, 'AMAN': 3, 'SUDAH_SK': 4 };
+          return generatedEvents.sort((a, b) => (statusPriority[a.status] - statusPriority[b.status]) || (a.nextTmt.getTime() - b.nextTmt.getTime()));
+        }, [employees, sks, ranks, monitoringNotes]);
+
+        const handleDownloadExcel = () => {
+           const filtered = events.filter(ev => (ev.name.toLowerCase().includes(search.toLowerCase()) || ev.nip.includes(search)) && (showSafe || ev.status !== 'AMAN'));
+           const data = filtered.map((item, i) => ({ No: i+1, Nama: item.name, NIP: item.nip, 'Pangkat/Gol': `${item.rankName} (${item.golongan})`, 'TMT Terakhir': formatDate(item.lastTmt), Jenis: item.type, 'Estimasi TMT': formatDate(item.nextTmt), Status: item.status, Catatan: item.noteData?.notes || '-', Confirmed: item.noteData?.isConfirmed?'Ya':'Tidak' }));
+           exportToExcel(data, 'Monitoring_ASN');
         };
 
-        /**
-         * ==========================================
-         * 2. LOGIC ENGINE (KGB & Pangkat Calc)
-         * ==========================================
-         */
-        const Logic = {
-            addMonths: (dateStr, months) => {
-                const d = new Date(dateStr);
-                d.setMonth(d.getMonth() + months);
-                return d.toISOString().split('T')[0];
-            },
-            
-            getStatus: (targetDateStr) => {
-                const today = new Date();
-                today.setHours(0,0,0,0);
-                const target = new Date(targetDateStr);
-                
-                // Hitung selisih bulan
-                const diffTime = target - today;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                
-                if (diffDays < 0) return { label: 'Terlambat', color: 'bg-red-100 text-red-700 border-red-200', code: 'late' };
-                if (diffDays <= 30 && diffDays >= 0) return { label: 'Jatuh Tempo', color: 'bg-orange-100 text-orange-700 border-orange-200', code: 'due' }; // Bulan ini
-                if (diffDays <= 90) return { label: 'Mendekati', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', code: 'near' }; // 3 bulan
-                return { label: 'Aman', color: 'bg-green-100 text-green-700 border-green-200', code: 'safe' };
-            },
+        const filteredEvents = events.filter(ev => (ev.name.toLowerCase().includes(search.toLowerCase()) || ev.nip.includes(search)) && (showSafe || ev.status !== 'AMAN'));
+        const paginatedEvents = filteredEvents.slice((currentPage-1)*itemsPerPage, currentPage*itemsPerPage);
 
-            getAllMonitoringData: () => {
-                const pegawai = DB.get('pegawai');
-                const kgbHist = DB.get('sk_kgb');
-                const pangHist = DB.get('sk_pangkat');
-                let results = [];
-
-                pegawai.forEach(p => {
-                    // Cek KGB (Siklus 2 Tahun)
-                    const lastKgb = kgbHist.filter(k => k.pegawaiId == p.id).sort((a,b) => b.tmt.localeCompare(a.tmt))[0];
-                    if(lastKgb) {
-                        const nextDate = Logic.addMonths(lastKgb.tmt, 24);
-                        results.push({
-                            pegawai: p, type: 'KGB', lastTmt: lastKgb.tmt, nextDate: nextDate, status: Logic.getStatus(nextDate)
-                        });
-                    }
-                    
-                    // Cek Pangkat (Siklus 4 Tahun)
-                    const lastPang = pangHist.filter(k => k.pegawaiId == p.id).sort((a,b) => b.tmt.localeCompare(a.tmt))[0];
-                    if(lastPang) {
-                        const nextDate = Logic.addMonths(lastPang.tmt, 48);
-                        results.push({
-                            pegawai: p, type: 'Pangkat', lastTmt: lastPang.tmt, nextDate: nextDate, status: Logic.getStatus(nextDate)
-                        });
-                    }
-                });
-                return results;
-            }
+        const handleSaveNote = async () => {
+          if (!currentEvent) return;
+          const note = { id: currentEvent.id, employeeId: currentEvent.employeeId, type: currentEvent.type, year: currentEvent.nextTmt.getFullYear(), notes: noteText, isConfirmed: isConfirmed, updatedAt: Date.now() };
+          await saveMonitoringNote(note);
+          await refreshData();
+          setIsModalOpen(false);
         };
 
-        /**
-         * ==========================================
-         * 3. UI UTILITIES
-         * ==========================================
-         */
-        const UI = {
-            formatRupiah: (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(angka),
-            formatDate: (date) => new Date(date).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'}),
-            
-            showToast: (msg) => {
-                const t = document.getElementById('toast');
-                document.getElementById('toast-message').innerText = msg;
-                t.classList.remove('translate-y-20');
-                setTimeout(() => t.classList.add('translate-y-20'), 3000);
-            },
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4"><div><h2 className="text-2xl font-bold text-gray-800">Monitoring Kenaikan</h2><p className="text-gray-500 text-sm mt-1">Daftar estimasi kenaikan berikutnya.</p></div><button onClick={handleDownloadExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-emerald-700 transition shadow-sm"><Download size={18} /> Excel</button></div>
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-3"><div className="flex-1 flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 bg-gray-50"><Search className="text-gray-400" size={20} /><input type="text" placeholder="Cari Nama atau NIP..." className="flex-1 outline-none text-gray-700 bg-transparent" value={search} onChange={e => setSearch(e.target.value)} /></div><label className="flex items-center gap-2 text-sm font-medium text-gray-600 cursor-pointer border border-gray-200 rounded-lg px-4 py-2"><input type="checkbox" checked={showSafe} onChange={e => setShowSafe(e.target.checked)} className="w-4 h-4" /> Tampilkan Aman</label></div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col"><div className="overflow-y-auto max-h-[60vh]"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold sticky top-0"><tr><th className="p-4">No</th><th className="p-4">Pegawai</th><th className="p-4">Pangkat</th><th className="p-4">TMT Akhir</th><th className="p-4">Jenis</th><th className="p-4">Estimasi</th><th className="p-4">Status</th><th className="p-4">Catatan</th><th className="p-4">Aksi</th></tr></thead><tbody className="divide-y divide-gray-100 text-sm">{paginatedEvents.map((item, i) => (<tr key={item.id} className={`hover:bg-gray-50 ${item.noteData?.isConfirmed?'bg-green-50/30':''}`}><td className="p-4 text-center">{(currentPage-1)*itemsPerPage+i+1}</td><td className="p-4"><div>{item.name}</div><div className="text-xs text-gray-500">{item.nip}</div></td><td className="p-4"><div>{item.golongan}</div><div className="text-xs text-gray-400">{item.rankName}</div></td><td className="p-4">{formatDate(item.lastTmt)}</td><td className="p-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.type==='KGB'?'bg-blue-50 text-blue-600':'bg-purple-50 text-purple-600'}`}>{item.type}</span></td><td className="p-4 font-bold">{formatDate(item.nextTmt)}</td><td className="p-4">{item.status==='TERLAMBAT'?<span className="text-red-700 font-bold text-xs bg-red-100 px-2 py-1 rounded">Terlambat</span>:item.status==='JATUH_TEMPO'?<span className="text-orange-700 font-bold text-xs bg-orange-100 px-2 py-1 rounded">Tempo</span>:item.status==='MENDEKATI'?<span className="text-yellow-700 font-bold text-xs bg-yellow-100 px-2 py-1 rounded">Mendekati</span>:<span className="text-green-700 font-bold text-xs bg-green-100 px-2 py-1 rounded">Aman</span>}</td><td className="p-4 max-w-xs truncate text-xs">{item.noteData?.notes}</td><td className="p-4 text-center"><button onClick={() => { setCurrentEvent(item); setNoteText(item.noteData?.notes||''); setIsConfirmed(item.noteData?.isConfirmed||false); setIsModalOpen(true); }} className="p-2 border rounded hover:bg-gray-50"><Edit size={16}/></button></td></tr>))}</tbody></table></div></div>
+            {isModalOpen && currentEvent && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-xl shadow-2xl max-w-md w-full"><div className="p-4 border-b flex justify-between"><h3>Konfirmasi</h3><button onClick={()=>setIsModalOpen(false)}><X size={20}/></button></div><div className="p-6 space-y-4"><div className="bg-blue-50 p-3 rounded text-sm text-blue-800"><b>{currentEvent.name}</b><br/>{currentEvent.type} • {formatDate(currentEvent.nextTmt)}</div><textarea className="w-full p-3 border rounded" placeholder="Catatan..." value={noteText} onChange={e=>setNoteText(e.target.value)} /><label className="flex gap-2 items-center"><input type="checkbox" checked={isConfirmed} onChange={e=>setIsConfirmed(e.target.checked)} /> Tandai Dikonfirmasi</label></div><div className="p-4 border-t flex gap-3"><button onClick={()=>setIsModalOpen(false)} className="flex-1 py-2 border rounded">Batal</button><button onClick={handleSaveNote} className="flex-1 py-2 bg-blue-600 text-white rounded">Simpan</button></div></div></div>)}
+          </div>
+        );
+      };
 
-            openModal: (title, html, onSave) => {
-                document.getElementById('modal-title').innerText = title;
-                document.getElementById('modal-body').innerHTML = html;
-                
-                const btn = document.getElementById('modal-save-btn');
-                const newBtn = btn.cloneNode(true);
-                btn.parentNode.replaceChild(newBtn, btn);
-                
-                newBtn.onclick = () => {
-                    if(onSave()) {
-                        UI.closeModal();
-                        UI.showToast('Data berhasil disimpan');
-                    }
-                };
+      const EmployeeList = ({ notify }) => {
+        const { employees, positions, refreshData } = useData();
+        const [search, setSearch] = useState('');
+        const [currentPage, setCurrentPage] = useState(1);
+        const [isModalOpen, setIsModalOpen] = useState(false);
+        const [editingEmp, setEditingEmp] = useState(null);
+        const [deleteId, setDeleteId] = useState(null);
+        const fileInputRef = useRef(null);
+        const itemsPerPage = 10;
+        useEffect(() => setCurrentPage(1), [search]);
 
-                document.getElementById('modal').classList.remove('hidden');
-            },
+        const filtered = employees.filter(e => e.name.toLowerCase().includes(search.toLowerCase()) || e.nip.includes(search));
+        const paginated = filtered.slice((currentPage-1)*itemsPerPage, currentPage*itemsPerPage);
 
-            closeModal: () => document.getElementById('modal').classList.add('hidden'),
-
-            // Reusable Table Builder with Pagination
-            renderTable: (config) => {
-                const { id, columns, data, actions, page = 1, limit = 10 } = config;
-                const start = (page - 1) * limit;
-                let displayData = limit === 'all' ? data : data.slice(start, start + limit);
-                
-                let html = `
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full fade-in">
-                    <div class="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-4">
-                        <div class="flex items-center gap-2">
-                            <span class="text-sm text-slate-500">Show</span>
-                            <select onchange="App.setLimit('${id}', this.value)" class="border rounded px-2 py-1 text-sm bg-slate-50">
-                                <option value="10" ${limit==10?'selected':''}>10</option>
-                                <option value="25" ${limit==25?'selected':''}>25</option>
-                                <option value="50" ${limit==50?'selected':''}>50</option>
-                                <option value="all" ${limit=='all'?'selected':''}>Semua</option>
-                            </select>
-                        </div>
-                        <input type="text" placeholder="Cari data..." oninput="App.searchTable('${id}', this.value)" class="border rounded px-3 py-1.5 text-sm w-full md:w-64 focus:ring-2 focus:ring-blue-100 outline-none">
-                    </div>
-                    <div class="table-container flex-1">
-                        <table class="w-full text-left border-collapse" id="table-${id}">
-                            <thead class="bg-slate-50 text-slate-500 text-xs uppercase font-bold tracking-wider">
-                                <tr>
-                                    ${columns.map(c => `<th class="px-6 py-3 whitespace-nowrap">${c}</th>`).join('')}
-                                    ${actions ? '<th class="px-6 py-3 text-right">Aksi</th>' : ''}
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-100">
-                                ${displayData.length ? displayData.map(row => `
-                                    <tr class="hover:bg-slate-50 transition-colors">
-                                        ${row.cells.map(cell => `<td class="px-6 py-3 text-sm text-slate-700 whitespace-nowrap">${cell}</td>`).join('')}
-                                        ${actions ? `<td class="px-6 py-3 text-right whitespace-nowrap">${actions(row.id)}</td>` : ''}
-                                    </tr>
-                                `).join('') : `<tr><td colspan="${columns.length + (actions?1:0)}" class="text-center py-8 text-slate-400">Tidak ada data</td></tr>`}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="p-4 border-t border-slate-100 flex justify-between items-center text-sm text-slate-500">
-                        <span>Menampilkan ${displayData.length} dari ${data.length} data</span>
-                        <div class="flex gap-1">
-                            <button onclick="App.setPage('${id}', ${page-1})" ${page<=1 ? 'disabled class="opacity-50 cursor-not-allowed"' : ''} class="px-3 py-1 border rounded hover:bg-slate-50">Prev</button>
-                            <button onclick="App.setPage('${id}', ${page+1})" ${limit==='all' || start+limit >= data.length ? 'disabled class="opacity-50 cursor-not-allowed"' : ''} class="px-3 py-1 border rounded hover:bg-slate-50">Next</button>
-                        </div>
-                    </div>
-                </div>`;
-                return html;
-            }
+        const handleSave = async (data) => {
+          const isDup = employees.some(e => e.nip === data.nip && e.id !== data.id);
+          if (isDup) return notify(`NIP ${data.nip} sudah ada`, 'error');
+          await saveEmployee(data); await refreshData(); setIsModalOpen(false); notify('Berhasil disimpan', 'success');
+        };
+        const handleDelete = async () => { if(deleteId) { await deleteEmployee(deleteId); await refreshData(); setDeleteId(null); notify('Pegawai dihapus', 'success'); } };
+        const handleExport = () => exportToExcel(filtered.map((e,i)=>({No:i+1, Nama:e.name, NIP:e.nip, Jabatan: positions.find(p=>p.id===e.positionId)?.name, Status: e.isActive?'Aktif':'Non'})), 'Data_Pegawai');
+        const handleUpload = async (e) => {
+          const file = e.target.files?.[0]; if(!file) return;
+          try {
+             const data = await readExcelFile(file);
+             let s=0, f=0; const nips = new Set();
+             for(const row of data) {
+                if(!row['NIP']||!row['Nama']) { f++; continue; }
+                const nip = row['NIP'].toString().trim();
+                if(employees.some(e=>e.nip===nip) || nips.has(nip)) { f++; continue; }
+                nips.add(nip);
+                const pos = positions.find(p=>p.name.toLowerCase()===row['Nama Jabatan']?.toString().toLowerCase().trim());
+                await saveEmployee({id: crypto.randomUUID(), nip, name: row['Nama'], positionId: pos?.id||'', isActive: row['Status']?.toLowerCase()==='aktif', createdAt: Date.now()});
+                s++;
+             }
+             await refreshData(); notify(`${s} Sukses, ${f} Gagal`, s>0?'success':'error');
+          } catch(err) { notify('Gagal upload', 'error'); }
+          if(fileInputRef.current) fileInputRef.current.value='';
         };
 
-        /**
-         * ==========================================
-         * 4. APP CONTROLLER
-         * ==========================================
-         */
-        const App = {
-            state: {
-                page: 'dashboard',
-                tables: {} // Store table pagination states
-            },
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-col xl:flex-row justify-between gap-4"><h2 className="text-2xl font-bold">Data Pegawai</h2><div className="flex gap-2 flex-wrap"><button onClick={()=>exportToExcel([{NIP:'1990..',Nama:'Nama', 'Nama Jabatan':'Jafung', Status:'Aktif'}], 'Template_Pegawai')} className="border px-3 py-2 rounded flex gap-2 bg-white text-sm"><FileSpreadsheet size={18}/> Template</button><button onClick={()=>fileInputRef.current?.click()} className="bg-indigo-600 text-white px-3 py-2 rounded flex gap-2 text-sm"><Upload size={18}/> Upload</button><input type="file" ref={fileInputRef} className="hidden" onChange={handleUpload}/><button onClick={handleExport} className="bg-emerald-600 text-white px-3 py-2 rounded flex gap-2 text-sm"><Download size={18}/> Export</button><button onClick={()=>{setEditingEmp(null);setIsModalOpen(true)}} className="bg-blue-600 text-white px-3 py-2 rounded flex gap-2 text-sm"><Plus size={18}/> Tambah</button></div></div>
+            <div className="bg-white p-4 rounded border flex gap-3"><Search className="text-gray-400"/><input className="flex-1 outline-none" placeholder="Cari NIP/Nama..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
+            <div className="bg-white rounded border overflow-hidden"><div className="overflow-y-auto max-h-[60vh]"><table className="w-full text-left"><thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-4">Pegawai</th><th className="p-4">Jabatan</th><th className="p-4 text-center">Status</th><th className="p-4 text-center">Aksi</th></tr></thead><tbody className="text-sm divide-y">{paginated.map(e=>(<tr key={e.id} className="hover:bg-gray-50"><td className="p-4"><b>{e.name}</b><br/><span className="text-xs text-gray-500">{e.nip}</span></td><td className="p-4">{positions.find(p=>p.id===e.positionId)?.name}</td><td className="p-4 text-center"><span className={`px-2 py-1 rounded-full text-xs ${e.isActive?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'}`}>{e.isActive?'Aktif':'Non'}</span></td><td className="p-4 text-center flex justify-center gap-2"><button onClick={()=>{setEditingEmp(e);setIsModalOpen(true)}} className="text-blue-600 p-2 rounded hover:bg-blue-50"><Edit size={18}/></button><button onClick={()=>setDeleteId(e.id)} className="text-red-600 p-2 rounded hover:bg-red-50"><Trash2 size={18}/></button></td></tr>))}</tbody></table></div></div>
+            <EmployeeForm isOpen={isModalOpen} initialData={editingEmp} positions={positions} onClose={()=>setIsModalOpen(false)} onSave={handleSave} />
+            <ConfirmModal isOpen={!!deleteId} title="Hapus Pegawai?" message="Hapus pegawai akan menghapus data SK terkait." onConfirm={handleDelete} onCancel={()=>setDeleteId(null)} />
+          </div>
+        );
+      };
 
-            init: () => {
-                DB.init();
-                App.router('dashboard');
-            },
+      const SKManager = ({ notify }) => {
+        const { sks, employees, ranks, refreshData } = useData();
+        const [tab, setTab] = useState('PANGKAT');
+        const [search, setSearch] = useState('');
+        const [page, setPage] = useState(1);
+        const [isModal, setIsModal] = useState(false);
+        const [form, setForm] = useState({});
+        const [delId, setDelId] = useState(null);
+        const fileRef = useRef(null);
+        useEffect(()=>setPage(1),[search,tab]);
+        
+        const filtered = sks.filter(s => s.type === tab && (s.number.includes(search) || employees.find(e=>e.id===s.employeeId)?.name.toLowerCase().includes(search.toLowerCase())));
+        const paginated = filtered.slice((page-1)*10, page*10);
 
-            router: (page) => {
-                App.state.page = page;
-                
-                // Update Sidebar Active State
-                document.querySelectorAll('.nav-link').forEach(el => {
-                    el.classList.remove('bg-slate-800', 'text-white', 'border-blue-500');
-                    el.classList.add('text-slate-300', 'border-transparent');
-                    if(el.getAttribute('onclick').includes(page)) {
-                        el.classList.add('bg-slate-800', 'text-white', 'border-blue-500');
-                        el.classList.remove('border-transparent', 'text-slate-300');
-                    }
-                });
-
-                // Hide sidebar on mobile after click
-                if(window.innerWidth < 768) document.getElementById('sidebar').classList.add('hidden');
-
-                const content = document.getElementById('app-content');
-                content.innerHTML = ''; // Clear
-
-                switch(page) {
-                    case 'dashboard': App.renderDashboard(content); break;
-                    case 'pegawai': App.renderPegawai(content); break;
-                    case 'monitoring': App.renderMonitoring(content); break;
-                    case 'sk_kgb': App.renderSK(content, 'kgb'); break;
-                    case 'sk_pangkat': App.renderSK(content, 'pangkat'); break;
-                    case 'master_jabatan': App.renderMaster(content, 'master_jabatan'); break;
-                    case 'master_pangkat': App.renderMaster(content, 'master_pangkat'); break;
-                }
-            },
-
-            // --- TABLE STATE HANDLERS ---
-            setLimit: (id, val) => {
-                if(!App.state.tables[id]) App.state.tables[id] = {page:1};
-                App.state.tables[id].limit = val === 'all' ? 'all' : parseInt(val);
-                App.state.tables[id].page = 1; // Reset to page 1
-                App.router(App.state.page); // Re-render
-            },
-            setPage: (id, val) => {
-                if(!App.state.tables[id]) App.state.tables[id] = {limit:10};
-                App.state.tables[id].page = val;
-                App.router(App.state.page);
-            },
-            searchTable: (id, term) => {
-                const table = document.getElementById(`table-${id}`);
-                const trs = table.getElementsByTagName('tr');
-                for (let i = 1; i < trs.length; i++) {
-                    const txt = trs[i].textContent.toLowerCase();
-                    trs[i].style.display = txt.includes(term.toLowerCase()) ? '' : 'none';
-                }
-            },
-
-            // --- RENDERERS ---
-
-            renderDashboard: (container) => {
-                const data = Logic.getAllMonitoringData();
-                const pegawai = DB.get('pegawai').length;
-                
-                // Stats
-                const thisMonth = new Date().getMonth();
-                const thisYear = new Date().getFullYear();
-                
-                const kgbMonth = data.filter(x => x.type === 'KGB' && new Date(x.nextDate).getMonth() === thisMonth && new Date(x.nextDate).getFullYear() === thisYear).length;
-                const pangYear = data.filter(x => x.type === 'Pangkat' && new Date(x.nextDate).getFullYear() === thisYear).length;
-                const late = data.filter(x => x.status.code === 'late').length;
-
-                // Chart Data (KGB per month)
-                const monthCounts = Array(12).fill(0);
-                data.filter(x => x.type === 'KGB' && new Date(x.nextDate).getFullYear() === thisYear).forEach(x => {
-                    monthCounts[new Date(x.nextDate).getMonth()]++;
-                });
-
-                container.innerHTML = `
-                    <h2 class="text-2xl font-bold text-slate-800 mb-6">Dashboard Ikhtisar</h2>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
-                            <p class="text-xs text-slate-500 uppercase font-bold">Total Pegawai</p>
-                            <p class="text-3xl font-bold text-slate-800 mt-2">${pegawai}</p>
-                        </div>
-                        <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-500">
-                            <p class="text-xs text-slate-500 uppercase font-bold">KGB Bulan Ini</p>
-                            <p class="text-3xl font-bold text-slate-800 mt-2">${kgbMonth}</p>
-                        </div>
-                        <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-indigo-500">
-                            <p class="text-xs text-slate-500 uppercase font-bold">Naik Pangkat (Thn Ini)</p>
-                            <p class="text-3xl font-bold text-slate-800 mt-2">${pangYear}</p>
-                        </div>
-                        <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500">
-                            <p class="text-xs text-slate-500 uppercase font-bold">Terlambat Proses</p>
-                            <p class="text-3xl font-bold text-red-600 mt-2">${late}</p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-96">
-                        <div class="bg-white p-6 rounded-xl shadow-sm lg:col-span-2 flex flex-col">
-                            <h3 class="font-bold text-slate-700 mb-4">Grafik KGB Tahun ${thisYear}</h3>
-                            <div class="flex-1 relative"><canvas id="kgbChart"></canvas></div>
-                        </div>
-                        <div class="bg-white p-6 rounded-xl shadow-sm flex flex-col">
-                            <h3 class="font-bold text-slate-700 mb-4">Status Mendesak (Top 5)</h3>
-                            <div class="flex-1 overflow-auto space-y-3">
-                                ${data.filter(x => x.status.code === 'late' || x.status.code === 'due').slice(0, 5).map(x => `
-                                    <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-100">
-                                        <div>
-                                            <p class="font-semibold text-sm text-slate-800">${x.pegawai.nama}</p>
-                                            <p class="text-xs text-slate-500">${x.type} - ${UI.formatDate(x.nextDate)}</p>
-                                        </div>
-                                        <span class="text-xs font-bold px-2 py-1 rounded ${x.status.color}">${x.status.label}</span>
-                                    </div>
-                                `).join('') || '<p class="text-sm text-slate-400 text-center mt-10">Tidak ada data mendesak.</p>'}
-                            </div>
-                        </div>
-                    </div>
-                `;
-
-                // Render Chart
-                new Chart(document.getElementById('kgbChart'), {
-                    type: 'bar',
-                    data: {
-                        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agust', 'Sep', 'Okt', 'Nov', 'Des'],
-                        datasets: [{ label: 'Jadwal KGB', data: monthCounts, backgroundColor: '#3b82f6', borderRadius: 4 }]
-                    },
-                    options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: {stepSize:1} } } }
-                });
-            },
-
-            renderPegawai: (container) => {
-                const list = DB.get('pegawai');
-                const mJab = DB.get('master_jabatan');
-                const mPang = DB.get('master_pangkat');
-                const state = App.state.tables['pegawai'] || {page:1, limit:10};
-
-                const header = `
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-slate-800">Data Pegawai ASN</h2>
-                        <button onclick="App.modalPegawai()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow flex items-center gap-2"><i class="fa-solid fa-plus"></i> Tambah</button>
-                    </div>`;
-                
-                const tableData = list.map(p => ({
-                    id: p.id,
-                    cells: [
-                        `<div class="font-mono font-medium">${p.nip}</div>`,
-                        `<div class="font-semibold">${p.nama}</div>`,
-                        mJab.find(j => j.id == p.jabatanId)?.nama || '-',
-                        `<span class="bg-slate-100 px-2 py-1 rounded text-xs font-bold border border-slate-200">${mPang.find(pg => pg.id == p.pangkatId)?.gol || '-'}</span>`
-                    ]
-                }));
-
-                const actions = (id) => `
-                    <button onclick="App.deleteItem('pegawai', '${id}')" class="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded transition"><i class="fa-solid fa-trash-alt"></i></button>
-                `;
-
-                container.innerHTML = header + UI.renderTable({ id: 'pegawai', columns: ['NIP', 'Nama', 'Jabatan', 'Golongan'], data: tableData, actions, page: state.page, limit: state.limit });
-            },
-
-            renderSK: (container, type) => {
-                const dbKey = type === 'kgb' ? 'sk_kgb' : 'sk_pangkat';
-                const list = DB.get(dbKey).sort((a,b) => b.tmt.localeCompare(a.tmt)); // Sort desc TMT
-                const peg = DB.get('pegawai');
-                const mPang = DB.get('master_pangkat');
-                const state = App.state.tables[dbKey] || {page:1, limit:10};
-
-                const title = type === 'kgb' ? 'Kenaikan Gaji Berkala (KGB)' : 'Kenaikan Pangkat';
-                
-                const header = `
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-slate-800">Riwayat ${title}</h2>
-                        <button onclick="App.modalSK('${type}')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow flex items-center gap-2"><i class="fa-solid fa-file-circle-plus"></i> Input SK Baru</button>
-                    </div>`;
-
-                const tableData = list.map(item => {
-                    const p = peg.find(x => x.id == item.pegawaiId);
-                    const val = type === 'kgb' ? UI.formatRupiah(item.gaji) : (mPang.find(x => x.id == item.pangkatId)?.gol || item.pangkatId);
-                    return {
-                        id: item.id,
-                        cells: [
-                            `<div class="font-medium">${p ? p.nama : 'Unknown'}</div><div class="text-xs text-slate-500">${p?.nip||''}</div>`,
-                            item.no_sk,
-                            `<div class="text-blue-600 font-mono font-bold">${UI.formatDate(item.tmt)}</div>`,
-                            val,
-                            UI.formatDate(item.tgl_sk)
-                        ]
-                    };
-                });
-
-                const actions = (id) => `<button onclick="App.deleteItem('${dbKey}', '${id}')" class="text-red-500 hover:bg-red-50 p-2 rounded"><i class="fa-solid fa-trash"></i></button>`;
-                
-                container.innerHTML = header + UI.renderTable({ 
-                    id: dbKey, 
-                    columns: ['Pegawai', 'No. SK', 'TMT (Terhitung Mulai)', type==='kgb'?'Gaji Baru':'Pangkat Baru', 'Tgl SK'], 
-                    data: tableData, actions, page: state.page, limit: state.limit 
-                });
-            },
-
-            renderMonitoring: (container) => {
-                let data = Logic.getAllMonitoringData();
-                const state = App.state.tables['monitor'] || {page:1, limit:10};
-
-                // Filter UI Logic would go here (simplified for single file)
-                // Filter by year/month if requested in UI inputs
-                
-                // Sorting: Terlambat & Jatuh Tempo First
-                const priority = { 'late': 1, 'due': 2, 'near': 3, 'safe': 4 };
-                data.sort((a,b) => priority[a.status.code] - priority[b.status.code]);
-
-                const header = `<h2 class="text-2xl font-bold text-slate-800 mb-6">Monitoring Jadwal</h2>`;
-
-                const tableData = data.map(item => ({
-                    id: item.pegawai.id + item.type, // Fake ID
-                    cells: [
-                        `<div class="font-bold">${item.pegawai.nama}</div><div class="text-xs text-slate-500">${item.pegawai.nip}</div>`,
-                        `<span class="px-2 py-1 rounded text-xs font-bold ${item.type==='KGB'?'bg-blue-50 text-blue-600':'bg-indigo-50 text-indigo-600'}">${item.type}</span>`,
-                        UI.formatDate(item.lastTmt),
-                        `<div class="font-bold text-slate-700">${UI.formatDate(item.nextDate)}</div>`,
-                        `<span class="px-3 py-1 rounded-full text-xs font-bold border ${item.status.color}">${item.status.label}</span>`
-                    ]
-                }));
-
-                container.innerHTML = header + UI.renderTable({
-                    id: 'monitor',
-                    columns: ['Pegawai', 'Jenis', 'TMT Terakhir', 'Jadwal Berikutnya', 'Status'],
-                    data: tableData,
-                    page: state.page, limit: state.limit
-                });
-            },
-
-            renderMaster: (container, key) => {
-                const title = key === 'master_jabatan' ? 'Jabatan' : 'Pangkat/Golongan';
-                const list = DB.get(key);
-                const state = App.state.tables[key] || {page:1, limit:10};
-
-                const header = `
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-slate-800">Master ${title}</h2>
-                        <button onclick="App.modalMaster('${key}')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow">+ Tambah</button>
-                    </div>`;
-
-                const columns = key === 'master_jabatan' ? ['Nama Jabatan'] : ['Pangkat', 'Golongan'];
-                const tableData = list.map(item => ({
-                    id: item.id,
-                    cells: key === 'master_jabatan' ? [item.nama] : [item.pangkat, item.gol]
-                }));
-
-                const actions = (id) => `<button onclick="App.deleteItem('${key}', '${id}')" class="text-red-500 hover:bg-red-50 p-2 rounded"><i class="fa-solid fa-trash"></i></button>`;
-
-                container.innerHTML = header + UI.renderTable({ id: key, columns, data: tableData, actions, page: state.page, limit: state.limit });
-            },
-
-            // --- FORM LOGIC ---
-
-            modalPegawai: () => {
-                const jabs = DB.get('master_jabatan').map(x => `<option value="${x.id}">${x.nama}</option>`).join('');
-                const pangs = DB.get('master_pangkat').map(x => `<option value="${x.id}">${x.gol} - ${x.pangkat}</option>`).join('');
-                
-                const html = `
-                    <form id="form-generic" class="space-y-4">
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">NIP</label><input required name="nip" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"></div>
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label><input required name="nama" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"></div>
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Jabatan</label><select name="jabatanId" class="w-full border rounded-lg px-3 py-2 bg-white">${jabs}</select></div>
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Pangkat</label><select name="pangkatId" class="w-full border rounded-lg px-3 py-2 bg-white">${pangs}</select></div>
-                    </form>`;
-                
-                UI.openModal('Tambah Pegawai', html, () => {
-                    const form = document.getElementById('form-generic');
-                    if(!form.checkValidity()) return alert('Mohon lengkapi data');
-                    const data = Object.fromEntries(new FormData(form));
-                    data.id = Date.now().toString();
-                    const list = DB.get('pegawai');
-                    list.push(data);
-                    DB.set('pegawai', list);
-                    App.router('pegawai');
-                    return true;
-                });
-            },
-
-            modalSK: (type) => {
-                const pegOptions = DB.get('pegawai').map(p => `<option value="${p.id}">${p.nama} (${p.nip})</option>`).join('');
-                const extraField = type === 'kgb' 
-                    ? `<div><label class="block text-sm font-medium text-slate-700 mb-1">Gaji Baru (Rp)</label><input type="number" required name="gaji" class="w-full border rounded-lg px-3 py-2"></div>`
-                    : `<div><label class="block text-sm font-medium text-slate-700 mb-1">Pangkat Baru</label><select name="pangkatId" class="w-full border rounded-lg px-3 py-2 bg-white">${DB.get('master_pangkat').map(x=>`<option value="${x.id}">${x.gol}</option>`).join('')}</select></div>`;
-                
-                const html = `
-                    <form id="form-generic" class="space-y-4">
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Pilih Pegawai</label><select name="pegawaiId" class="w-full border rounded-lg px-3 py-2 bg-white">${pegOptions}</select></div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Nomor SK</label><input required name="no_sk" class="w-full border rounded-lg px-3 py-2"></div>
-                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Tanggal SK</label><input type="date" required name="tgl_sk" class="w-full border rounded-lg px-3 py-2"></div>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">TMT (Terhitung Mulai)</label>
-                            <input type="date" required name="tmt" class="w-full border rounded-lg px-3 py-2 border-blue-300">
-                            <p class="text-xs text-blue-500 mt-1">*Menentukan jadwal kenaikan berikutnya</p>
-                        </div>
-                        ${extraField}
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Keterangan</label><textarea name="ket" class="w-full border rounded-lg px-3 py-2" rows="2"></textarea></div>
-                    </form>`;
-
-                UI.openModal(`Input SK ${type.toUpperCase()}`, html, () => {
-                    const form = document.getElementById('form-generic');
-                    if(!form.checkValidity()) return alert('Lengkapi data wajib');
-                    const data = Object.fromEntries(new FormData(form));
-                    if(!data.tmt) return alert('TMT Wajib diisi');
-                    
-                    data.id = Date.now().toString();
-                    const key = type === 'kgb' ? 'sk_kgb' : 'sk_pangkat';
-                    const list = DB.get(key);
-                    list.push(data);
-                    DB.set(key, list);
-                    
-                    // Update current rank in employee data if rank upgrade
-                    if(type === 'pangkat') {
-                        const pegs = DB.get('pegawai');
-                        const pIndex = pegs.findIndex(p => p.id == data.pegawaiId);
-                        if(pIndex > -1) {
-                            pegs[pIndex].pangkatId = data.pangkatId;
-                            DB.set('pegawai', pegs);
-                        }
-                    }
-
-                    App.router(`sk_${type}`);
-                    return true;
-                });
-            },
-
-            modalMaster: (key) => {
-                const isJab = key === 'master_jabatan';
-                const fields = isJab 
-                    ? `<div><label class="block text-sm font-medium text-slate-700">Nama Jabatan</label><input required name="nama" class="w-full border rounded px-3 py-2"></div>`
-                    : `<div><label class="block text-sm font-medium text-slate-700">Pangkat</label><input required name="pangkat" class="w-full border rounded px-3 py-2 mb-2"></div>
-                       <div><label class="block text-sm font-medium text-slate-700">Golongan (cth: III/a)</label><input required name="gol" class="w-full border rounded px-3 py-2"></div>`;
-                
-                const html = `<form id="form-generic" class="space-y-4">${fields}</form>`;
-                
-                UI.openModal('Tambah Master', html, () => {
-                    const form = document.getElementById('form-generic');
-                    if(!form.checkValidity()) return alert('Isi semua field');
-                    const data = Object.fromEntries(new FormData(form));
-                    data.id = Date.now().toString();
-                    
-                    // Validation duplicate
-                    const list = DB.get(key);
-                    if(isJab && list.find(x => x.nama.toLowerCase() === data.nama.toLowerCase())) return alert('Jabatan sudah ada');
-                    if(!isJab && list.find(x => x.gol === data.gol)) return alert('Golongan sudah ada');
-
-                    list.push(data);
-                    DB.set(key, list);
-                    App.router(key);
-                    return true;
-                });
-            },
-
-            deleteItem: (key, id) => {
-                if(confirm('Yakin ingin menghapus data ini?')) {
-                    const list = DB.get(key).filter(x => x.id !== id);
-                    DB.set(key, list);
-                    App.router(App.state.page); // Refresh
-                    UI.showToast('Data dihapus');
-                }
-            }
+        const handleSave = async (e) => {
+          e.preventDefault();
+          await saveSK({ ...form, id: form.id||crypto.randomUUID(), type: tab, salary: Number(form.salary)||0, createdAt: Date.now() });
+          await refreshData(); setIsModal(false); notify('SK Disimpan', 'success');
+        };
+        const handleDel = async () => { if(delId){ await deleteSK(delId); await refreshData(); setDelId(null); notify('SK Dihapus', 'success'); } };
+        const handleUp = async (e) => {
+           const f=e.target.files?.[0]; if(!f) return;
+           const d = await readExcelFile(f);
+           let s=0; 
+           for(const r of d) {
+             const emp = employees.find(x=>x.nip===r['NIP']?.toString());
+             if(!emp || !r['No SK'] || !r['TMT']) continue;
+             let rid = emp.rankId||'';
+             if(tab==='PANGKAT') { const fr = ranks.find(rk=>rk.golongan===r['Golongan'] || rk.name===r['Nama Pangkat']); if(fr) rid=fr.id; }
+             await saveSK({id: crypto.randomUUID(), type: tab, employeeId: emp.id, number: r['No SK'], rankId: rid, tmtDate: new Date(r['TMT']).toISOString().slice(0,10), date: new Date(r['Tanggal SK']||r['TMT']).toISOString().slice(0,10), salary: Number(r['Gaji'])||0, notes: r['Keterangan']||'', createdAt: Date.now()});
+             s++;
+           }
+           await refreshData(); notify(`${s} Data Uploaded`, 'success');
+           if(fileRef.current) fileRef.current.value='';
         };
 
-        // START
-        window.addEventListener('DOMContentLoaded', App.init);
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-col xl:flex-row justify-between gap-4"><h2 className="text-2xl font-bold">Manajemen SK</h2><div className="flex gap-2 flex-wrap"><button onClick={()=>exportToExcel([{NIP:'..','No SK':'..','Tanggal SK':'YYYY-MM-DD',TMT:'YYYY-MM-DD','Nama Pangkat':'..',Golongan:'..',Gaji:0,Keterangan:'..'}], 'Template_SK')} className="border px-3 py-2 bg-white rounded flex gap-2 text-sm"><FileSpreadsheet size={18}/> Template</button><button onClick={()=>fileRef.current?.click()} className="bg-indigo-600 text-white px-3 py-2 rounded flex gap-2 text-sm"><Upload size={18}/> Upload</button><input type="file" ref={fileRef} className="hidden" onChange={handleUp}/><button onClick={()=>exportToExcel(filtered.map((s,i)=>({No:i+1,'No SK':s.number,Pegawai:employees.find(e=>e.id===s.employeeId)?.name})), 'Data_SK')} className="bg-emerald-600 text-white px-3 py-2 rounded flex gap-2 text-sm"><Download size={18}/> Export</button><button onClick={()=>{setForm({tmtDate:'',date:'',salary:0,notes:''});setIsModal(true)}} className="bg-blue-600 text-white px-3 py-2 rounded flex gap-2 text-sm"><Plus size={18}/> Input SK</button></div></div>
+            <div className="flex gap-2 border-b"><button onClick={()=>setTab('PANGKAT')} className={`px-4 py-2 border-b-2 flex gap-2 ${tab==='PANGKAT'?'border-blue-600 text-blue-600':'border-transparent'}`}><Award size={18}/> Pangkat</button><button onClick={()=>setTab('KGB')} className={`px-4 py-2 border-b-2 flex gap-2 ${tab==='KGB'?'border-emerald-600 text-emerald-600':'border-transparent'}`}><FileText size={18}/> KGB</button></div>
+            <div className="bg-white p-4 rounded border flex gap-3"><Search className="text-gray-400"/><input className="flex-1 outline-none" placeholder="Cari SK/Pegawai..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
+            <div className="bg-white rounded border overflow-hidden"><div className="overflow-y-auto max-h-[60vh]"><table className="w-full text-left whitespace-nowrap"><thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-4">SK</th><th className="p-4">Pegawai</th><th className="p-4">Pangkat</th><th className="p-4">TMT</th><th className="p-4">Gaji</th><th className="p-4 text-center">Aksi</th></tr></thead><tbody className="text-sm divide-y">{paginated.map(s=>(<tr key={s.id} className="hover:bg-gray-50"><td className="p-4"><b>{s.number}</b><br/><span className="text-xs text-gray-500">{formatDate(s.date)}</span></td><td className="p-4">{employees.find(e=>e.id===s.employeeId)?.name}</td><td className="p-4">{ranks.find(r=>r.id===s.rankId)?.golongan}</td><td className="p-4">{formatDate(s.tmtDate)}</td><td className="p-4">{formatCurrency(s.salary)}</td><td className="p-4 text-center flex justify-center gap-2"><button onClick={()=>{setForm(s);setIsModal(true)}} className="text-blue-600 p-2 hover:bg-blue-50 rounded"><Edit size={18}/></button><button onClick={()=>setDelId(s.id)} className="text-red-600 p-2 hover:bg-red-50 rounded"><Trash2 size={18}/></button></td></tr>))}</tbody></table></div></div>
+            {isModal && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="bg-white rounded-xl w-full max-w-lg"><div className="p-4 border-b flex justify-between"><h3>Input SK {tab}</h3><button onClick={()=>setIsModal(false)}><X size={20}/></button></div><form onSubmit={handleSave} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto"><div><label>Pegawai</label><select required className="w-full p-2 border rounded" value={form.employeeId||''} onChange={e=>{const em=employees.find(x=>x.id===e.target.value);setForm({...form,employeeId:e.target.value,rankId:em?.rankId})}}><option value="">-Pilih-</option>{employees.filter(e=>e.isActive).map(e=><option key={e.id} value={e.id}>{e.name} - {e.nip}</option>)}</select></div><div><label>No SK</label><input required className="w-full p-2 border rounded" value={form.number||''} onChange={e=>setForm({...form,number:e.target.value})}/></div><div className="grid grid-cols-2 gap-4"><div><label>Tgl SK</label><input type="date" required className="w-full p-2 border rounded" value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></div><div><label>TMT</label><input type="date" required className="w-full p-2 border rounded" value={form.tmtDate||''} onChange={e=>setForm({...form,tmtDate:e.target.value})}/></div></div><div className="grid grid-cols-2 gap-4"><div><label>Pangkat</label><select required className="w-full p-2 border rounded" value={form.rankId||''} onChange={e=>setForm({...form,rankId:e.target.value})}><option value="">-Pilih-</option>{ranks.map(r=><option key={r.id} value={r.id}>{r.golongan}</option>)}</select></div><div><label>Gaji</label><input type="number" required className="w-full p-2 border rounded" value={form.salary||''} onChange={e=>setForm({...form,salary:e.target.value})}/></div></div><textarea className="w-full p-2 border rounded" placeholder="Catatan" value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/><button className="w-full py-2 bg-blue-600 text-white rounded">Simpan</button></form></div></div>)}
+            <ConfirmModal isOpen={!!delId} title="Hapus SK?" message="Permanen." onConfirm={handleDel} onCancel={()=>setDelId(null)}/>
+          </div>
+        );
+      };
+
+      const MasterData = ({ type, notify }) => {
+         const { positions, ranks, refreshData } = useData();
+         const data = type==='JABATAN'?positions:ranks;
+         const [editId, setEditId] = useState(null);
+         const [form, setForm] = useState({});
+         const [delId, setDelId] = useState(null);
+         const fileRef = useRef(null);
+
+         const handleSave = async () => {
+           if(type==='JABATAN') await savePosition({id: editId==='NEW'?crypto.randomUUID():editId, name: form.name});
+           else await saveRank({id: editId==='NEW'?crypto.randomUUID():editId, ...form});
+           await refreshData(); setEditId(null); notify('Disimpan','success');
+         };
+         const handleDel = async () => { if(delId){ if(type==='JABATAN') await deletePosition(delId); else await deleteRank(delId); await refreshData(); setDelId(null); notify('Dihapus','success'); } };
+         const handleUp = async (e) => {
+           const f=e.target.files?.[0]; if(!f) return;
+           const d = await readExcelFile(f);
+           let c=0;
+           for(const r of d) {
+             if(type==='JABATAN' && r['Nama Jabatan']) { await savePosition({id:crypto.randomUUID(), name:r['Nama Jabatan']}); c++; }
+             else if(type==='PANGKAT' && r['Nama Pangkat']) { await saveRank({id:crypto.randomUUID(), name:r['Nama Pangkat'], golongan:r['Golongan']}); c++; }
+           }
+           await refreshData(); notify(`${c} Data Uploaded`,'success');
+           if(fileRef.current) fileRef.current.value='';
+         };
+
+         return (
+           <div className="space-y-6">
+             <div className="flex justify-between items-center"><h2 className="text-2xl font-bold">Master {type==='JABATAN'?'Jabatan':'Pangkat'}</h2><div className="flex gap-2"><button onClick={()=>exportToExcel([type==='JABATAN'?{'Nama Jabatan':'Example'}:{'Nama Pangkat':' Pembina',Golongan:'IV/a'}], 'Template')} className="border px-3 py-2 bg-white rounded flex gap-2 text-sm"><FileSpreadsheet size={18}/> Template</button><button onClick={()=>fileRef.current?.click()} className="bg-indigo-600 text-white px-3 py-2 rounded flex gap-2 text-sm"><Upload size={18}/> Upload</button><input type="file" ref={fileRef} className="hidden" onChange={handleUp}/><button onClick={()=>exportToExcel(data,'Master')} className="bg-emerald-600 text-white px-3 py-2 rounded flex gap-2 text-sm"><Download size={18}/> Export</button><button onClick={()=>{setEditId('NEW');setForm({})}} className="bg-blue-600 text-white px-3 py-2 rounded flex gap-2 text-sm"><Plus size={18}/> Tambah</button></div></div>
+             <div className="bg-white rounded border overflow-hidden"><table className="w-full text-left"><thead className="bg-gray-50 text-xs uppercase"><tr><th className="p-4">Nama</th>{type==='PANGKAT'&&<th className="p-4">Golongan</th>}<th className="p-4 text-center">Aksi</th></tr></thead><tbody className="text-sm divide-y">
+               {editId==='NEW' && <tr className="bg-blue-50"><td className="p-4"><input autoFocus className="w-full p-2 border rounded" placeholder="Nama" value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></td>{type==='PANGKAT'&&<td className="p-4"><input className="w-full p-2 border rounded" placeholder="Gol" value={form.golongan||''} onChange={e=>setForm({...form,golongan:e.target.value})}/></td>}<td className="p-4 text-center"><button onClick={handleSave}><Save size={18}/></button> <button onClick={()=>setEditId(null)}><X size={18}/></button></td></tr>}
+               {data.map(item=>(<tr key={item.id} className="hover:bg-gray-50"><td className="p-4">{editId===item.id?<input className="w-full p-2 border rounded" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>:item.name}</td>{type==='PANGKAT'&&<td className="p-4">{editId===item.id?<input className="w-full p-2 border rounded" value={form.golongan} onChange={e=>setForm({...form,golongan:e.target.value})}/>:<span className="bg-gray-100 px-2 py-1 rounded text-xs font-bold">{item.golongan}</span>}</td>}<td className="p-4 text-center flex justify-center gap-2">{editId===item.id?(<><button onClick={handleSave} className="text-emerald-600"><Save size={18}/></button><button onClick={()=>setEditId(null)} className="text-gray-500"><X size={18}/></button></>):(<><button onClick={()=>{setEditId(item.id);setForm(item)}} className="text-blue-600"><Edit size={18}/></button><button onClick={()=>setDelId(item.id)} className="text-red-600"><Trash2 size={18}/></button></>)}</td></tr>))}
+             </tbody></table></div>
+             <ConfirmModal isOpen={!!delId} title="Hapus?" message="Permanen." onConfirm={handleDel} onCancel={()=>setDelId(null)}/>
+           </div>
+         );
+      };
+
+      // --- APP LAYOUT & ROUTING ---
+      
+      const ToastContainer = ({ messages }) => (
+        <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2">{messages.map((m)=>(<div key={m.id} className={`flex gap-3 px-4 py-3 rounded shadow text-white animate-slide-in ${m.type==='success'?'bg-emerald-600':m.type==='error'?'bg-red-600':'bg-blue-600'}`}><span>{m.message}</span></div>))}</div>
+      );
+
+      const Layout = ({ children, userEmail }) => {
+        const [sb, setSb] = useState(false);
+        const { isLoading } = useData();
+        const loc = useLocation();
+        const navigate = useNavigate();
+        
+        const LinkItem = ({ to, icon, label }) => (<Link to={to} onClick={()=>setSb(false)} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${loc.pathname===to?'bg-blue-600 text-white shadow-md':'text-gray-600 hover:bg-blue-50 hover:text-blue-600'}`}>{icon}<span className="font-medium">{label}</span></Link>);
+
+        return (
+          <div className="flex h-screen bg-gray-50 text-gray-900">
+            {sb && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={()=>setSb(false)}/>}
+            <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r transform transition-transform duration-200 ${sb?'translate-x-0':'-translate-x-full lg:translate-x-0'}`}>
+               <div className="h-16 flex items-center px-6 border-b"><span className="text-xl font-bold text-blue-600">ASN Monitor</span></div>
+               <nav className="p-4 space-y-1 overflow-y-auto h-[calc(100%-4rem-4rem)]">
+                 <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Menu</div>
+                 <LinkItem to="/" icon={<LayoutDashboard size={18}/>} label="Dashboard"/>
+                 <LinkItem to="/monitoring" icon={<BarChart2 size={18}/>} label="Monitoring"/>
+                 <div className="mt-4 px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Data</div>
+                 <LinkItem to="/pegawai" icon={<Users size={18}/>} label="Pegawai"/>
+                 <LinkItem to="/manajemen-sk" icon={<FolderOpen size={18}/>} label="Manajemen SK"/>
+                 <div className="mt-4 px-4 py-2 text-xs font-semibold text-gray-400 uppercase">Master</div>
+                 <LinkItem to="/master-jabatan" icon={<Briefcase size={18}/>} label="Jabatan"/>
+                 <LinkItem to="/master-pangkat" icon={<Award size={18}/>} label="Pangkat"/>
+               </nav>
+               <div className="p-4 border-t"><button onClick={async()=>{await signOut();navigate('/login')}} className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-red-600 hover:bg-red-50"><LogOut size={18}/> Keluar</button></div>
+            </aside>
+            <main className="flex-1 flex flex-col h-screen overflow-hidden">
+               <header className="h-16 bg-white border-b flex items-center justify-between px-4"><button onClick={()=>setSb(true)} className="lg:hidden p-2"><Menu/></button><div className="ml-auto flex items-center gap-4 text-sm">{userEmail} <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center">{userEmail?.[0].toUpperCase()}</div></div></header>
+               <div className="flex-1 overflow-y-auto p-4 lg:p-8">{isLoading?<div className="flex h-full items-center justify-center"><Loader2 className="animate-spin w-10 h-10 text-blue-600"/></div>:children}</div>
+            </main>
+          </div>
+        );
+      };
+
+      const App = () => {
+        const [toasts, setToasts] = useState([]);
+        const [session, setSession] = useState(null);
+        const [loading, setLoading] = useState(true);
+
+        useEffect(() => {
+          supabase.auth.getSession().then(({ data: { session } }) => { setSession(session); setLoading(false); });
+          const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+          return () => subscription.unsubscribe();
+        }, []);
+
+        const notify = (message, type = 'info') => {
+          const id = crypto.randomUUID();
+          setToasts(p => [...p, { id, message, type }]);
+          setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3000);
+        };
+
+        if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-10 h-10 text-blue-600 animate-spin" /></div>;
+
+        return (
+          <HashRouter>
+            <Routes>
+              <Route path="/login" element={!session ? <Login notify={notify} /> : <Navigate to="/" replace />} />
+              <Route path="/register" element={!session ? <Register notify={notify} /> : <Navigate to="/" replace />} />
+              <Route element={session ? <DataProvider><Outlet /></DataProvider> : <Navigate to="/login" replace />}>
+                <Route path="*" element={
+                  <Layout userEmail={session?.user?.email}>
+                    <Routes>
+                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/monitoring" element={<Monitoring />} />
+                      <Route path="/pegawai" element={<EmployeeList notify={notify} />} />
+                      <Route path="/manajemen-sk" element={<SKManager notify={notify} />} />
+                      <Route path="/master-jabatan" element={<MasterData type="JABATAN" notify={notify} />} />
+                      <Route path="/master-pangkat" element={<MasterData type="PANGKAT" notify={notify} />} />
+                    </Routes>
+                  </Layout>
+                } />
+              </Route>
+            </Routes>
+            <ToastContainer messages={toasts} />
+          </HashRouter>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
     </script>
-</body>
+  </body>
 </html>
